@@ -4,6 +4,7 @@ import { layouts } from "../layout";
 import type { LayoutTab } from "../layout";
 import { sectionUri } from "../schema";
 import { useAppStore } from "../store";
+import LogForm from "./LogForm";
 import ScrollArea from "./ScrollArea";
 import SectionCard from "./SectionCard";
 import SectionEditor from "./SectionEditor";
@@ -45,15 +46,19 @@ export default function ConfigTabs() {
     ) : (
       <ScrollArea className="tab-scroll-area" style={{ flex: 1, minHeight: 0 }}>
         <Space direction="vertical" size={10} style={{ width: "100%", paddingBottom: 8 }}>
-          {tab.children.map((c) => (
-            <SectionCard
-              key={c.key}
-              path={c.key}
-              label={c.label}
-              value={store.sections[c.key]}
-              onChange={(v) => store.setSection(c.key, v)}
-            />
-          ))}
+          {tab.children.map((c) =>
+            c.key === "log" ? (
+              <LogForm key={c.key} label={c.label} />
+            ) : (
+              <SectionCard
+                key={c.key}
+                path={c.key}
+                label={c.label}
+                value={store.sections[c.key]}
+                onChange={(v) => store.setSection(c.key, v)}
+              />
+            ),
+          )}
         </Space>
       </ScrollArea>
     );

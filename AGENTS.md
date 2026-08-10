@@ -46,14 +46,15 @@ cargo test              # 后端测试（在 src-tauri/ 下执行）
 ### 前端（`src/`）
 
 - `layout.ts`：**页签/子 section 结构的唯一定义点**（单点修改）。`layouts` 数组硬编码：inbounds/outbounds/rules→routing.rules/balancers→routing.balancers/other；other 的 children 用配置驱动过滤（`allChildPaths`/`descendantSections` 推导），而非硬编码，children 集合 = log/api/dns/fakedns/policy/stats/metrics/observatory/burstObservatory/geodata/env/version/reverse/transport/routing。child.key 即 xray 配置点号路径。
-  - **新增/调整页签只需改 `layout.ts` + `schema.ts` + `json.ts`，后端零改动**（TabContents 5 个字段的前端分组经 `sectionsToTabs` 组装）。
+  - **新增/调整页签只需改 `layout.ts` + `schema.ts` + `json.ts`，后端零改动**（TabContents 5 个字段的前端分组经 `sectionsToTabs` 组装）。若某 section 需要表单 UI，则额外在 `ConfigTabs.tsx` 加分支并按 `LogForm` 范式新建表单组件。
 - `json.ts`：`parseJsonc` / `splitSections` / `buildFull` / `sectionsToTabs`（前后端边界适配层）。
 - `schema.ts`：`sectionUri(path)=file:///xray/<path>.json`；`ARRAY_DEFS` + `SINGLE_DEFS` 映射 xray-schema.json 的 definitions；transport 不注册 schema。
 - `store.ts`：zustand 全局状态：`profiles`/`currentProfileId`/`settings`/`mode`/`files`/`sections`/`savedSections`/`dirtySections`/`loading`/`error`/`warning`/`result`/`resultKind` 等；`setSection`、`refresh`、`selectProfile`、`markClean`、`saveProfiles`、`saveSettings`、`setTheme`、`setResult`、`clearResult`。
 - `api.ts`：`invoke` 封装，camelCase 字段 → Rust snake_case。
 - `monaco.ts`：Monaco 初始化（`MonacoEnvironment.getWorker` + `loader.config({ monaco })`）。
 - `components/`：
-  - `ConfigTabs.tsx` / `SectionCard.tsx` / `SectionEditor.tsx`：配置编辑区。单 child section 无 label 占满高度；多 child 用 ScrollArea 垂直卡片。
+  - `ConfigTabs.tsx` / `SectionCard.tsx` / `SectionEditor.tsx`：配置编辑区。单 child section 无 label 占满高度；多 child 用 ScrollArea 垂直卡片。多卡片分支对 `c.key === "log"` 特判渲染 `LogForm`。
+  - `LogForm.tsx`：log section 的表单编辑（**表单 UI 的既有范式**）。卡片头部图标按钮（`CodeOutlined`/`FormOutlined`）在「表单/JSON」两种模式间切换，状态为本地 `useState`；两种模式共用 `store.sections.log`，切换不丢数据。表单改动经 `setSection("log", …)` 写回：合并进现有已解析对象**保留未知字段**、access/error/loglevel/maskAddress 空值及 `dnsLog:false` 自动剔除、结果为空对象时写空串。access/error 用 Input+「选择」按钮（`@tauri-apps/plugin-dialog` 的 `open`）；loglevel 用 Select；dnsLog 用 Switch；maskAddress 用 AutoComplete（quarter/half/full 建议）。JSON 模式复用 `SectionEditor`（path="log"），编辑区样式类 `.log-form`。
   - `ProfileBar.tsx`：工具栏（测试/应用/刷新 + 配置文件选择 + 管理配置文件）。**刷新会清空测试结果**；切换 profile 或刷新时存在脏数据需 confirm。
   - `ProfileManagerModal.tsx` / `ProfileModal.tsx` / `SettingsModal.tsx`：配置文件管理/编辑/设置弹窗。
   - `ResultChip.tsx` / `ResultModal.tsx` / `ResultPanel.tsx`：测试/应用结果展示（弹窗只展示 stdout/stderr）。

@@ -170,6 +170,10 @@ body {
   flex-direction: column;
 }
 
+.log-form {
+  padding: 0 16px 12px;
+}
+
 .section-card-editor .editor-wrap {
   border: none;
   border-radius: 0;
