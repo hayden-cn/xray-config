@@ -174,7 +174,118 @@ body {
   padding: 0 16px 12px;
 }
 
+.routing-form {
+  padding: 0 16px 12px;
+}
+
+.json-editor {
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--section-head-bg);
+}
+
+.json-editor-placeholder {
+  position: absolute;
+  right: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+  pointer-events: none;
+  user-select: none;
+  white-space: pre-wrap;
+  z-index: 2;
+}
+
+/* routing rules list form */
+.routing-rules-form {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.routing-rules-json {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.routing-rules-list {
+  flex: 1;
+  min-height: 0;
+}
+
+.rule-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--section-head-bg);
+}
+
+.rule-index {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(128, 128, 128, 0.18);
+  color: var(--text-tertiary);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rule-card-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rule-target {
+  flex: none;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.rule-target.outbound {
+  color: #52c41a;
+}
+
+.rule-target.balancer {
+  color: #d46b08;
+}
+
+.rule-target.none {
+  color: #cf1322;
+}
+
+.rule-card-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+}
+
+.target-block {
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 10px 12px 12px;
+  background: var(--section-head-bg);
+}
+
 .section-card-editor .editor-wrap {
+  border: none;
+  border-radius: 0;
+}
+
+.routing-rules-json .editor-wrap {
   border: none;
   border-radius: 0;
 }

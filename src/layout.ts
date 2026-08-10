@@ -22,6 +22,7 @@ export const layouts: LayoutTab[] = [
     label: "其他",
     children: [
       { key: "log", label: "日志" },
+      { key: "routing", label: "路由" },
       { key: "api", label: "API" },
       { key: "dns", label: "DNS" },
       { key: "fakedns", label: "FakeDNS" },
@@ -35,7 +36,6 @@ export const layouts: LayoutTab[] = [
       { key: "version", label: "版本" },
       { key: "reverse", label: "反向代理" },
       { key: "transport", label: "传输" },
-      { key: "routing", label: "路由" },
     ],
   },
 ];

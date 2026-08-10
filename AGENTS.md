@@ -45,16 +45,21 @@ cargo test              # 后端测试（在 src-tauri/ 下执行）
 
 ### 前端（`src/`）
 
-- `layout.ts`：**页签/子 section 结构的唯一定义点**（单点修改）。`layouts` 数组硬编码：inbounds/outbounds/rules→routing.rules/balancers→routing.balancers/other；other 的 children 用配置驱动过滤（`allChildPaths`/`descendantSections` 推导），而非硬编码，children 集合 = log/api/dns/fakedns/policy/stats/metrics/observatory/burstObservatory/geodata/env/version/reverse/transport/routing。child.key 即 xray 配置点号路径。
-  - **新增/调整页签只需改 `layout.ts` + `schema.ts` + `json.ts`，后端零改动**（TabContents 5 个字段的前端分组经 `sectionsToTabs` 组装）。若某 section 需要表单 UI，则额外在 `ConfigTabs.tsx` 加分支并按 `LogForm` 范式新建表单组件。
-- `json.ts`：`parseJsonc` / `splitSections` / `buildFull` / `sectionsToTabs`（前后端边界适配层）。
-- `schema.ts`：`sectionUri(path)=file:///xray/<path>.json`；`ARRAY_DEFS` + `SINGLE_DEFS` 映射 xray-schema.json 的 definitions；transport 不注册 schema。
+- `layout.ts`：**页签/子 section 结构的唯一定义点**（单点修改）。`layouts` 数组硬编码：inbounds/outbounds/rules→routing.rules/balancers→routing.balancers/other；other 的 children 顺序 = log/routing/api/dns/fakedns/policy/stats/metrics/observatory/burstObservatory/geodata/env/version/reverse/transport。child.key 即 xray 配置点号路径；`descendantSections(path)` 供 `json.ts` 把已独立拆出的子 section 从父级剥离（routing → routing.rules/routing.balancers）。
+  - **新增/调整页签只需改 `layout.ts`（+`schema.ts` 注册 schema），后端零改动**（`json.ts` 按 `allChildPaths` 自动遍历）。已有表单 UI 的 section：`routing.rules`/`routing.balancers`（SectionListForm）、`log`/`routing`（LogForm/RoutingForm）；其余走 SectionCard/SectionEditor。
+- `json.ts`：`parseJsonc` / `splitSections` / `buildFull` / `sectionsToTabs`（前后端边界适配层）。`stripDescendants` 将已独立拆出的子 section 从父级剔除（routing 只留 domainStrategy/domainMatcher 等，rules/balancers 归独立 section）；空数组/空对象→空串→从配置省略。
+- `rules.ts` / `balancers.ts`：数组类 section 的域类型与工具。`parseList<T>`/`formatList`（rules.ts 导出泛型，空数组→空串）、`extractTags(text)`（解析数组 section 收集对象元素的 tag，做下拉建议）、`ruleSummary`/`balancerSummary`（卡片摘要）。
+- `schema.ts`：`sectionUri(path)=file:///xray/<path>.json`；`ARRAY_DEFS`（inbounds/outbounds/`routing.rules`→RuleObject/`routing.balancers`→BalancerObject）+ `SINGLE_DEFS`（含 `routing`→RoutingObject）映射 xray-schema.json definitions；transport 不注册 schema。**捆绑 schema 的 RoutingObject 缺 `domainMatcher`**，但真实 xray 支持（additionalProperties 默认 true，Monaco 与 `-test` 均接受）。
 - `store.ts`：zustand 全局状态：`profiles`/`currentProfileId`/`settings`/`mode`/`files`/`sections`/`savedSections`/`dirtySections`/`loading`/`error`/`warning`/`result`/`resultKind` 等；`setSection`、`refresh`、`selectProfile`、`markClean`、`saveProfiles`、`saveSettings`、`setTheme`、`setResult`、`clearResult`。
 - `api.ts`：`invoke` 封装，camelCase 字段 → Rust snake_case。
 - `monaco.ts`：Monaco 初始化（`MonacoEnvironment.getWorker` + `loader.config({ monaco })`）。
 - `components/`：
-  - `ConfigTabs.tsx` / `SectionCard.tsx` / `SectionEditor.tsx`：配置编辑区。单 child section 无 label 占满高度；多 child 用 ScrollArea 垂直卡片。多卡片分支对 `c.key === "log"` 特判渲染 `LogForm`。
-  - `LogForm.tsx`：log section 的表单编辑（**表单 UI 的既有范式**）。卡片头部图标按钮（`CodeOutlined`/`FormOutlined`）在「表单/JSON」两种模式间切换，状态为本地 `useState`；两种模式共用 `store.sections.log`，切换不丢数据。表单改动经 `setSection("log", …)` 写回：合并进现有已解析对象**保留未知字段**、access/error/loglevel/maskAddress 空值及 `dnsLog:false` 自动剔除、结果为空对象时写空串。access/error 用 Input+「选择」按钮（`@tauri-apps/plugin-dialog` 的 `open`）；loglevel 用 Select；dnsLog 用 Switch；maskAddress 用 AutoComplete（quarter/half/full 建议）。JSON 模式复用 `SectionEditor`（path="log"），编辑区样式类 `.log-form`。
+  - `ConfigTabs.tsx`：配置编辑区分派。单 child：`routing.rules`→`RoutingRulesForm`、`routing.balancers`→`BalancerForm`、其余→`SectionEditor`；多 child：`log`→`LogForm`、`routing`→`RoutingForm`、其余→`SectionCard`（ScrollArea 垂直卡片）。
+  - `SectionListForm.tsx`：**对象数组类 section 的通用列表容器**（`routing.rules`/`routing.balancers` 共用）。props：`{path,title,parse,format,renderItem,EditModal,emptyText?,deleteConfirmTitle?}`；内置 form/json 双模式、invalid 强制 JSON + Alert、上移/下移/编辑/删除（新增按钮在切换按钮左侧）。新增数组类表单 = 写 parse/format（`parseList<T>`/`formatList`）+ renderItem + 编辑弹窗 + ConfigTabs 分支。
+  - `RuleEditModal.tsx` / `BalancerEditModal.tsx`：数组元素编辑弹窗范式——Form + `Form.useWatch`；tag 建议用 `extractTags(sections.outbounds/…)`（AutoComplete / Select mode="tags"）；保存时 clone initial **保留未知顶层字段**、已知字段重建、空值 delete；attrs/webhook/costs 等 JSON 片段字段用 `JsonEditor` + JSON validator；Modal 内 `ScrollArea maxHeight="50vh"` + `destroyOnHidden`。
+  - `LogForm.tsx` / `RoutingForm.tsx`：对象类 section 表单（**单 section 表单 UI 范式**）。头部图标按钮（`CodeOutlined`/`FormOutlined`）切换「表单/JSON」，本地 `useState`，共用 `store.sections.<path>`，切换不丢数据；写回经 `setSection`：合并已解析对象**保留未知字段**、空值剔除、空对象写空串（LogForm 另有 `dnsLog:false` 剔除）。RoutingForm 仅 domainStrategy/domainMatcher（rules/balancers 在独立页签编辑）。JSON 模式复用 `SectionEditor`。
+  - `JsonEditor.tsx`：嵌入表单的 JSON 片段 Monaco 编辑器（无 schema、数值高度、空值占位提示），`value`/`onChange` 由 antd `Form.Item` 注入（直接子元素）。
+  - `SectionCard.tsx` / `SectionEditor.tsx`：JSON 编辑卡片。`SectionEditor` 高度必须传数值（ResizeObserver 测外层容器）。
   - `ProfileBar.tsx`：工具栏（测试/应用/刷新 + 配置文件选择 + 管理配置文件）。**刷新会清空测试结果**；切换 profile 或刷新时存在脏数据需 confirm。
   - `ProfileManagerModal.tsx` / `ProfileModal.tsx` / `SettingsModal.tsx`：配置文件管理/编辑/设置弹窗。
   - `ResultChip.tsx` / `ResultModal.tsx` / `ResultPanel.tsx`：测试/应用结果展示（弹窗只展示 stdout/stderr）。
@@ -83,6 +88,7 @@ cargo test              # 后端测试（在 src-tauri/ 下执行）
 - **Spin 结构**：`.ant-spin > .ant-spin-container`（无 `.ant-spin-nested-loading`）。编辑器加载时高度链依赖此结构。
 - **Form.Item 只向直接子元素注入 value/onChange**：`<Form.Item><Space.Compact>…</Space.Compact></Form.Item>` 会静默丢失回写。正确写法：外层 `Form.Item`（仅 label，无 name）+ 内层 `<Form.Item name="…" noStyle>` 包裹 Input，加号/减号按钮作为兄弟元素放 Compact 内。ProfileModal 与 SettingsModal 均需此模式。
 - antd v6：`destroyOnHidden`（不是 `destroyOnClose`）；`message`/`modal` 必须经 `App.useApp()` 获取（AppProvider 已包裹）。
+- **Divider 分组标题用 `titlePlacement="start"`**：antd v6.5.4 的 `orientation` prop 类型被误声明为 `Orientation='horizontal'|'vertical'`（与 deprecated `type` prop 同类型），运行时却按 `titlePlacement` 校验生效；`orientation="left"` 会类型报错且不生效。
 - Modal 内容超高时用 ScrollArea + maxHeight 50vh 内部滚动，Modal 本身不滚。
 
 ## Monaco 0.56 关键坑

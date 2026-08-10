@@ -4,8 +4,10 @@ import { layouts } from "../layout";
 import type { LayoutTab } from "../layout";
 import { sectionUri } from "../schema";
 import { useAppStore } from "../store";
+import BalancerForm from "./BalancerForm";
 import LogForm from "./LogForm";
-import ScrollArea from "./ScrollArea";
+import RoutingForm from "./RoutingForm";
+import RoutingRulesForm from "./RoutingRulesForm";import ScrollArea from "./ScrollArea";
 import SectionCard from "./SectionCard";
 import SectionEditor from "./SectionEditor";
 import { useMarkers } from "./useMarkers";
@@ -38,17 +40,25 @@ export default function ConfigTabs() {
     const dirty = paths.some((p) => store.dirtySections.includes(p));
     const single = tab.children.length === 1 && !tab.children[0].label;
     const children = single ? (
-      <SectionEditor
-        path={tab.children[0].key}
-        value={store.sections[tab.children[0].key]}
-        onChange={(v) => store.setSection(tab.children[0].key, v)}
-      />
+      tab.children[0].key === "routing.rules" ? (
+        <RoutingRulesForm />
+      ) : tab.children[0].key === "routing.balancers" ? (
+        <BalancerForm />
+      ) : (
+        <SectionEditor
+          path={tab.children[0].key}
+          value={store.sections[tab.children[0].key]}
+          onChange={(v) => store.setSection(tab.children[0].key, v)}
+        />
+      )
     ) : (
       <ScrollArea className="tab-scroll-area" style={{ flex: 1, minHeight: 0 }}>
         <Space direction="vertical" size={10} style={{ width: "100%", paddingBottom: 8 }}>
           {tab.children.map((c) =>
             c.key === "log" ? (
               <LogForm key={c.key} label={c.label} />
+            ) : c.key === "routing" ? (
+              <RoutingForm key={c.key} label={c.label} />
             ) : (
               <SectionCard
                 key={c.key}
