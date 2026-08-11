@@ -56,6 +56,11 @@ export interface ApplyResult {
   apiUpdate?: ApiUpdateResult | null;
 }
 
+export interface X25519Result {
+  privateKey: string;
+  publicKey: string;
+}
+
 export const DEFAULT_TEMPLATE: TemplateEntry[] = [
   { file: "00_log.jsonc", keys: ["log"] },
   { file: "01_api.jsonc", keys: ["api"] },

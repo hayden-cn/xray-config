@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::models::{CommandOutput, TestResult};
+use crate::models::{CommandOutput, TestResult, X25519Result};
 
 pub fn find_xray(profile_xray: Option<&str>, default_xray: Option<&str>) -> Result<PathBuf, String> {
     if let Some(p) = profile_xray.map(str::trim).filter(|s| !s.is_empty()) {
@@ -121,8 +121,47 @@ pub fn run_with_timeout(
     })
 }
 
-pub fn run_test(bin: &Path, confdir: &Path) -> Result<TestResult, String> {
-    let args = vec![
+pub fn generate_uuid(bin: &Path) -> Result<String, String> {
+    let args = vec!["uuid".into()];
+    let out = run_with_timeout(bin, &args, Duration::from_secs(10))?;
+    if out.code != 0 {
+        let detail = out.stderr.trim();
+        let detail = if detail.is_empty() { out.stdout.trim() } else { detail };
+        return Err(format!("xray uuid 失败 (exit {}):\n{}", out.code, detail));
+    }
+    let uuid = out.stdout.trim().to_string();
+    if uuid.is_empty() {
+        return Err("xray uuid 输出为空".into());
+    }
+    Ok(uuid)
+}
+
+pub fn generate_x25519(bin: &Path) -> Result<X25519Result, String> {
+    let args = vec!["x25519".into()];
+    let out = run_with_timeout(bin, &args, Duration::from_secs(10))?;
+    if out.code != 0 {
+        let detail = out.stderr.trim();
+        let detail = if detail.is_empty() { out.stdout.trim() } else { detail };
+        return Err(format!("xray x25519 失败 (exit {}):\n{}", out.code, detail));
+    }
+    let stdout = out.stdout;
+    let private_key = parse_key(&stdout, "PrivateKey:");
+    let public_key = parse_key(&stdout, "Password (PublicKey):");
+    if private_key.is_empty() || public_key.is_empty() {
+        return Err("xray x25519 输出格式无法解析".into());
+    }
+    Ok(X25519Result { private_key, public_key })
+}
+
+fn parse_key(stdout: &str, prefix: &str) -> String {
+    stdout
+        .lines()
+        .find(|line| line.starts_with(prefix))
+        .map(|line| line[prefix.len()..].trim().to_string())
+        .unwrap_or_default()
+}
+
+pub fn run_test(bin: &Path, confdir: &Path) -> Result<TestResult, String> {    let args = vec![
         "run".into(),
         format!("-confdir={}", confdir.display()),
         "-test".into(),

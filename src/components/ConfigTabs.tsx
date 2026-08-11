@@ -5,9 +5,11 @@ import type { LayoutTab } from "../layout";
 import { sectionUri } from "../schema";
 import { useAppStore } from "../store";
 import BalancerForm from "./BalancerForm";
+import InboundForm from "./InboundForm";
 import LogForm from "./LogForm";
 import RoutingForm from "./RoutingForm";
-import RoutingRulesForm from "./RoutingRulesForm";import ScrollArea from "./ScrollArea";
+import RoutingRulesForm from "./RoutingRulesForm";
+import ScrollArea from "./ScrollArea";
 import SectionCard from "./SectionCard";
 import SectionEditor from "./SectionEditor";
 import { useMarkers } from "./useMarkers";
@@ -40,7 +42,9 @@ export default function ConfigTabs() {
     const dirty = paths.some((p) => store.dirtySections.includes(p));
     const single = tab.children.length === 1 && !tab.children[0].label;
     const children = single ? (
-      tab.children[0].key === "routing.rules" ? (
+      tab.children[0].key === "inbounds" ? (
+        <InboundForm />
+      ) : tab.children[0].key === "routing.rules" ? (
         <RoutingRulesForm />
       ) : tab.children[0].key === "routing.balancers" ? (
         <BalancerForm />

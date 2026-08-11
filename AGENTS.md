@@ -32,31 +32,31 @@ cargo test              # 后端测试（在 src-tauri/ 下执行）
 ## 架构与数据流
 
 ### 后端（`src-tauri/src/`）
+- `lib.rs`：注册 11 个命令（全部经 `#[tauri::command]`）：
 
-- `lib.rs`：注册 8 个命令（全部经 `#[tauri::command]`）：
-  `list_profiles`、`save_profiles`、`load_settings`、`save_settings`、`resolve_xray`、`read_config`、`test_config`、`apply_config`
+  `list_profiles`、`save_profiles`、`load_settings`、`save_settings`、`resolve_xray`、`generate_uuid`、`generate_x25519`、`read_text_file`、`read_config`、`test_config`、`apply_config`
 - `models.rs`：`Profile{id,name,path,api_address?,xray_path?}`、`Settings{default_xray_path?,default_multi_file_template,theme?}`、`TemplateEntry{file,keys}`、`TabContents{inbounds,outbounds,rules,balancers,other}`、`ReadConfigResult{mode,content,files,warning?}`、`TestResult{ok,code,message,stdout,stderr}`、`ApplyResult{ok,message,test?,written_files,api_update?}`、`ApiUpdateResult{ok,message,steps}`、`ApiStep{command,ok,message}`。
   - `default_template()`：15 条硬编码多文件模板（`00_log`…`99_version` + `98_other` 兜底 `*`）。**前端 `src/types.ts` 的 `DEFAULT_TEMPLATE` 必须与之保持同步**。
   - `settings.json` 中模板为空时 `effective_template()` 回退到 `default_template()`。
 - `storage.rs`：`profiles.json` / `settings.json` 持久化到 app_config_dir。
-- `xray.rs`：`find_xray`（优先级：profile.xray_path → settings.default_xray_path → 应用启动目录 → PATH）、`run_with_timeout`、`run_test`、`dump_folder`、`api_list`、`api_add`、`api_remove`、`api_adrules`。
+- `xray.rs`：`find_xray`（优先级：profile.xray_path → settings.default_xray_path → 应用启动目录 → PATH）、`run_with_timeout`、`run_test`、`dump_folder`、`generate_uuid`（运行 `xray uuid` 取 stdout）、`generate_x25519`（运行 `xray x25519`，解析 `PrivateKey:` 与 `Password (PublicKey):` 前缀）、`api_list`、`api_add`、`api_remove`、`api_adrules`。
 - `pipeline.rs`：`read_config` / `test_config` / `apply_config` / `run_api_update`。
   - `serialize_section` 写 .jsonc 文件时带 `// 拆分文件：<name>` 头注释。
 
 ### 前端（`src/`）
 
 - `layout.ts`：**页签/子 section 结构的唯一定义点**（单点修改）。`layouts` 数组硬编码：inbounds/outbounds/rules→routing.rules/balancers→routing.balancers/other；other 的 children 顺序 = log/routing/api/dns/fakedns/policy/stats/metrics/observatory/burstObservatory/geodata/env/version/reverse/transport。child.key 即 xray 配置点号路径；`descendantSections(path)` 供 `json.ts` 把已独立拆出的子 section 从父级剥离（routing → routing.rules/routing.balancers）。
-  - **新增/调整页签只需改 `layout.ts`（+`schema.ts` 注册 schema），后端零改动**（`json.ts` 按 `allChildPaths` 自动遍历）。已有表单 UI 的 section：`routing.rules`/`routing.balancers`（SectionListForm）、`log`/`routing`（LogForm/RoutingForm）；其余走 SectionCard/SectionEditor。
+  - **新增/调整页签只需改 `layout.ts`（+`schema.ts` 注册 schema），后端零改动**（`json.ts` 按 `allChildPaths` 自动遍历）。已有表单 UI 的 section：`inbounds`/`routing.rules`/`routing.balancers`（SectionListForm）、`log`/`routing`（LogForm/RoutingForm）；其余走 SectionCard/SectionEditor。
 - `json.ts`：`parseJsonc` / `splitSections` / `buildFull` / `sectionsToTabs`（前后端边界适配层）。`stripDescendants` 将已独立拆出的子 section 从父级剔除（routing 只留 domainStrategy/domainMatcher 等，rules/balancers 归独立 section）；空数组/空对象→空串→从配置省略。
-- `rules.ts` / `balancers.ts`：数组类 section 的域类型与工具。`parseList<T>`/`formatList`（rules.ts 导出泛型，空数组→空串）、`extractTags(text)`（解析数组 section 收集对象元素的 tag，做下拉建议）、`ruleSummary`/`balancerSummary`（卡片摘要）。
+- `rules.ts` / `balancers.ts` / `inbounds.ts`：数组类 section 的域类型与工具。`parseList<T>`/`formatList`（rules.ts 导出泛型，空数组→空串）、`extractTags(text)`（解析数组 section 收集对象元素的 tag，做下拉建议）、`ruleSummary`/`balancerSummary`/`inboundSummary`（卡片摘要）。
 - `schema.ts`：`sectionUri(path)=file:///xray/<path>.json`；`ARRAY_DEFS`（inbounds/outbounds/`routing.rules`→RuleObject/`routing.balancers`→BalancerObject）+ `SINGLE_DEFS`（含 `routing`→RoutingObject）映射 xray-schema.json definitions；transport 不注册 schema。**捆绑 schema 的 RoutingObject 缺 `domainMatcher`**，但真实 xray 支持（additionalProperties 默认 true，Monaco 与 `-test` 均接受）。
 - `store.ts`：zustand 全局状态：`profiles`/`currentProfileId`/`settings`/`mode`/`files`/`sections`/`savedSections`/`dirtySections`/`loading`/`error`/`warning`/`result`/`resultKind` 等；`setSection`、`refresh`、`selectProfile`、`markClean`、`saveProfiles`、`saveSettings`、`setTheme`、`setResult`、`clearResult`。
 - `api.ts`：`invoke` 封装，camelCase 字段 → Rust snake_case。
 - `monaco.ts`：Monaco 初始化（`MonacoEnvironment.getWorker` + `loader.config({ monaco })`）。
 - `components/`：
-  - `ConfigTabs.tsx`：配置编辑区分派。单 child：`routing.rules`→`RoutingRulesForm`、`routing.balancers`→`BalancerForm`、其余→`SectionEditor`；多 child：`log`→`LogForm`、`routing`→`RoutingForm`、其余→`SectionCard`（ScrollArea 垂直卡片）。
-  - `SectionListForm.tsx`：**对象数组类 section 的通用列表容器**（`routing.rules`/`routing.balancers` 共用）。props：`{path,title,parse,format,renderItem,EditModal,emptyText?,deleteConfirmTitle?}`；内置 form/json 双模式、invalid 强制 JSON + Alert、上移/下移/编辑/删除（新增按钮在切换按钮左侧）。新增数组类表单 = 写 parse/format（`parseList<T>`/`formatList`）+ renderItem + 编辑弹窗 + ConfigTabs 分支。
-  - `RuleEditModal.tsx` / `BalancerEditModal.tsx`：数组元素编辑弹窗范式——Form + `Form.useWatch`；tag 建议用 `extractTags(sections.outbounds/…)`（AutoComplete / Select mode="tags"）；保存时 clone initial **保留未知顶层字段**、已知字段重建、空值 delete；attrs/webhook/costs 等 JSON 片段字段用 `JsonEditor` + JSON validator；Modal 内 `ScrollArea maxHeight="50vh"` + `destroyOnHidden`。
+  - `ConfigTabs.tsx`：配置编辑区分派。单 child：`inbounds`→`InboundForm`、`routing.rules`→`RoutingRulesForm`、`routing.balancers`→`BalancerForm`、其余→`SectionEditor`；多 child：`log`→`LogForm`、`routing`→`RoutingForm`、其余→`SectionCard`（ScrollArea 垂直卡片）。
+  - `SectionListForm.tsx`：**对象数组类 section 的通用列表容器**（`inbounds`/`routing.rules`/`routing.balancers` 共用）。props：`{path,title,parse,format,renderItem,EditModal,emptyText?,deleteConfirmTitle?}`；内置 form/json 双模式、invalid 强制 JSON + Alert、上移/下移/编辑/删除（新增按钮在切换按钮左侧）。新增数组类表单 = 写 parse/format（`parseList<T>`/`formatList`）+ renderItem + 编辑弹窗 + ConfigTabs 分支。
+  - `RuleEditModal.tsx` / `BalancerEditModal.tsx` / `InboundEditModal.tsx`：数组元素编辑弹窗范式——Form + `Form.useWatch`；tag 建议用 `extractTags(sections.outbounds/…)`（AutoComplete / Select mode="tags"）；保存时 clone initial **保留未知顶层字段**、已知字段重建、空值 delete；attrs/webhook/costs 等 JSON 片段字段用 `JsonEditor` + JSON validator；Modal 内 `ScrollArea maxHeight="50vh"` + `destroyOnHidden`。InboundEditModal：**tag 非必填，基础配置顺序 tag/listen/port/protocol**；协议设置折叠（未选协议时展开为空并提示先选协议），vless/socks/http/wireguard 有结构化 settings 表单（**数组字段统一用 `ItemList` 列表展示 + 嵌套弹窗编辑**：vless users → `VlessUserModal`（id 输入框带「调用 xray uuid 生成」按钮 + email/level/flow）、socks/http accounts → `AccountUserModal`（user/pass）、wireguard peers → `WireguardPeerModal`（publicKey「选择文件」按钮 + presharedKey/allowedIPs/endpoint/keepAlive）；vless 另有 flow/decryption，fallbacks → `VlessFallbackModal`（name/alpn/path/dest/xver，dest 必填），socks 另有 auth/udp/ip/userLevel，http 另有 timeout/allowTransparent/userLevel，wireguard 另有 **secretKey（「选择文件」按钮经 dialog+`read_text_file` 读取私钥文件填入）+ address**），其余协议 settings 走 JsonEditor；sniffing 折叠置于表单末尾；传输配置整体折叠在 settings 之后——按 method 显示折叠的 `rawSettings` 结构化表单（acceptProxyProtocol + header.type http 伪装 request/response JSON），其余 method 走折叠的 `<method>Settings` JsonEditor（method→字段名映射 `METHOD_SETTINGS_KEYS`）；按 security 显示折叠的 `realitySettings` 结构化表单（服务端/客户端分组，服务端 privateKey 带「xray x25519」按钮调用 `generate_x25519` 快速生成密钥对并自动填入客户端公钥），security=tls 走折叠的 `tlsSettings` JsonEditor；sockopt/finalmask 各自独立 JSON 配置（`sockoptJson`/`finalmaskJson`），其余未结构化字段经 `otherStreamJson` 合并；新增协议/传输方式/安全表单只需在此增加分支。
   - `LogForm.tsx` / `RoutingForm.tsx`：对象类 section 表单（**单 section 表单 UI 范式**）。头部图标按钮（`CodeOutlined`/`FormOutlined`）切换「表单/JSON」，本地 `useState`，共用 `store.sections.<path>`，切换不丢数据；写回经 `setSection`：合并已解析对象**保留未知字段**、空值剔除、空对象写空串（LogForm 另有 `dnsLog:false` 剔除）。RoutingForm 仅 domainStrategy/domainMatcher（rules/balancers 在独立页签编辑）。JSON 模式复用 `SectionEditor`。
   - `JsonEditor.tsx`：嵌入表单的 JSON 片段 Monaco 编辑器（无 schema、数值高度、空值占位提示），`value`/`onChange` 由 antd `Form.Item` 注入（直接子元素）。
   - `SectionCard.tsx` / `SectionEditor.tsx`：JSON 编辑卡片。`SectionEditor` 高度必须传数值（ResizeObserver 测外层容器）。

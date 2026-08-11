@@ -6,6 +6,7 @@ import type {
   Settings,
   TabContents,
   TestResult,
+  X25519Result,
 } from "./types";
 
 export const api = {
@@ -15,6 +16,11 @@ export const api = {
   saveSettings: (settings: Settings) => invoke<void>("save_settings", { settings }),
   resolveXray: (profile: Profile, settings: Settings) =>
     invoke<string | null>("resolve_xray", { profile, settings }),
+  generateUuid: (profile: Profile, settings: Settings) =>
+    invoke<string>("generate_uuid", { profile, settings }),
+  generateX25519: (profile: Profile, settings: Settings) =>
+    invoke<X25519Result>("generate_x25519", { profile, settings }),
+  readTextFile: (path: string) => invoke<string>("read_text_file", { path }),
   readConfig: (profile: Profile, settings: Settings) =>
     invoke<ReadConfigResult>("read_config", { profile, settings }),
   testConfig: (profile: Profile, settings: Settings, tabs: TabContents) =>

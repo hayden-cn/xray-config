@@ -95,6 +95,13 @@ pub struct ApiStep {
     pub message: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct X25519Result {
+    pub private_key: String,
+    pub public_key: String,
+}
+
 pub fn default_template() -> Vec<TemplateEntry> {
     vec![
         TemplateEntry { file: "00_log.jsonc".into(), keys: vec!["log".into()] },

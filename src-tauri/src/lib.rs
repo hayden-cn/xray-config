@@ -3,7 +3,7 @@ pub mod pipeline;
 pub mod storage;
 pub mod xray;
 
-use models::{ApplyResult, Profile, ReadConfigResult, Settings, TabContents, TestResult};
+use models::{ApplyResult, Profile, ReadConfigResult, Settings, TabContents, TestResult, X25519Result};
 use tauri::AppHandle;
 
 #[tauri::command]
@@ -42,6 +42,23 @@ fn resolve_xray(profile: Profile, settings: Settings) -> Result<Option<String>, 
 }
 
 #[tauri::command]
+fn generate_uuid(profile: Profile, settings: Settings) -> Result<String, String> {
+    let bin = xray::find_xray(profile.xray_path.as_deref(), settings.default_xray_path.as_deref())?;
+    xray::generate_uuid(&bin)
+}
+
+#[tauri::command]
+fn generate_x25519(profile: Profile, settings: Settings) -> Result<X25519Result, String> {
+    let bin = xray::find_xray(profile.xray_path.as_deref(), settings.default_xray_path.as_deref())?;
+    xray::generate_x25519(&bin)
+}
+
+#[tauri::command]
+fn read_text_file(path: String) -> Result<String, String> {
+    std::fs::read_to_string(&path).map_err(|e| format!("读取文件失败: {}", e))
+}
+
+#[tauri::command]
 fn read_config(profile: Profile, settings: Settings) -> Result<ReadConfigResult, String> {
     pipeline::read_config(&profile, settings.default_xray_path.as_deref())
 }
@@ -77,6 +94,9 @@ pub fn run() {
             load_settings,
             save_settings,
             resolve_xray,
+            generate_uuid,
+            generate_x25519,
+            read_text_file,
             read_config,
             test_config,
             apply_config
