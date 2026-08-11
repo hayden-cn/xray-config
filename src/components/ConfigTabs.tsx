@@ -6,6 +6,7 @@ import { sectionUri } from "../schema";
 import { useAppStore } from "../store";
 import BalancerForm from "./BalancerForm";
 import InboundForm from "./InboundForm";
+import OutboundForm from "./OutboundForm";
 import LogForm from "./LogForm";
 import RoutingForm from "./RoutingForm";
 import RoutingRulesForm from "./RoutingRulesForm";
@@ -44,6 +45,8 @@ export default function ConfigTabs() {
     const children = single ? (
       tab.children[0].key === "inbounds" ? (
         <InboundForm />
+      ) : tab.children[0].key === "outbounds" ? (
+        <OutboundForm />
       ) : tab.children[0].key === "routing.rules" ? (
         <RoutingRulesForm />
       ) : tab.children[0].key === "routing.balancers" ? (

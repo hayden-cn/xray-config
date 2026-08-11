@@ -580,7 +580,7 @@ interface ItemListEntry {
 }
 
 /** 数组类字段的通用列表展示（条目 + 编辑/删除 + 新增按钮） */
-function ItemList({
+export function ItemList({
   items,
   emptyText,
   addText,
