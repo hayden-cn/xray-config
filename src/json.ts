@@ -93,7 +93,9 @@ export function splitSections(raw: string): Record<string, string> {
 /** 从 sections 重建全量对象（跳过空串/空对象/空数组） */
 export function buildFull(sections: Record<string, string>): Record<string, unknown> {
   const result: Record<string, unknown> = {};
-  for (const path of allChildPaths()) {
+  // 父路径先于子路径处理，避免父级（如 routing）整体覆盖已写入的子 section（rules/balancers）
+  const paths = allChildPaths().sort((a, b) => a.split(".").length - b.split(".").length);
+  for (const path of paths) {
     const text = sections[path];
     if (!text || !text.trim()) continue;
     const v = parseJsonc(text);
