@@ -36,14 +36,20 @@ export default function ResultChip({ onClick }: ResultChipProps) {
 
   const r = result as ApplyResult;
   if (r.ok) {
+    const cmdFailed = r.postCommand != null && r.postCommand.code !== 0;
     const partial = r.apiUpdate && !r.apiUpdate.ok;
+    const warn = cmdFailed || partial;
     return (
       <Button
         {...common}
-        className={partial ? "result-chip result-chip-warn" : "result-chip result-chip-ok"}
-        icon={partial ? <ExclamationCircleOutlined /> : <CheckCircleOutlined />}
+        className={warn ? "result-chip result-chip-warn" : "result-chip result-chip-ok"}
+        icon={warn ? <ExclamationCircleOutlined /> : <CheckCircleOutlined />}
       >
-        {partial ? "已应用（API 部分失败）" : "应用成功"}
+        {cmdFailed
+          ? "已应用（命令失败）"
+          : partial
+            ? "已应用（API 部分失败）"
+            : "应用成功"}
       </Button>
     );
   }

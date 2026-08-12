@@ -18,6 +18,7 @@ interface FormValues {
   path: string;
   apiAddress?: string;
   xrayPath?: string;
+  postApplyCommand?: string;
 }
 
 export default function ProfileModal({ open, onClose, profile, onSaved }: ProfileModalProps) {
@@ -33,6 +34,7 @@ export default function ProfileModal({ open, onClose, profile, onSaved }: Profil
       path: profile?.path ?? "",
       apiAddress: profile?.apiAddress ?? "",
       xrayPath: profile?.xrayPath ?? "",
+      postApplyCommand: profile?.postApplyCommand ?? "",
     });
   }, [open, profile, form]);
 
@@ -56,6 +58,7 @@ export default function ProfileModal({ open, onClose, profile, onSaved }: Profil
         path: values.path.trim(),
         apiAddress: values.apiAddress?.trim() || null,
         xrayPath: values.xrayPath?.trim() || null,
+        postApplyCommand: values.postApplyCommand?.trim() || null,
       };
       const store = useAppStore.getState();
       const next = profile
@@ -161,6 +164,19 @@ export default function ProfileModal({ open, onClose, profile, onSaved }: Profil
               <Input placeholder="xray / xray.exe" />
             </Form.Item>
             <Button icon={<FolderOpenOutlined />} onClick={() => pickFile("xrayPath")}>
+              选择
+            </Button>
+          </Space.Compact>
+        </Form.Item>
+        <Form.Item
+          label="应用后执行命令（可选）"
+          tooltip="「应用」成功写入配置后，经系统 shell 执行此命令（Windows 用 cmd /C），工作目录为 Profile 所在目录；执行失败不影响应用结果，仅作提示"
+        >
+          <Space.Compact style={{ width: "100%" }}>
+            <Form.Item name="postApplyCommand" noStyle>
+              <Input placeholder="例如：restart-xray.bat 或 net stop xray && net start xray" />
+            </Form.Item>
+            <Button icon={<FolderOpenOutlined />} onClick={() => pickFile("postApplyCommand")}>
               选择
             </Button>
           </Space.Compact>

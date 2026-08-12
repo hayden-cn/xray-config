@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::Path;
+use std::time::Duration;
 
 use serde_json::{Map, Value};
 use tempfile::TempDir;
@@ -553,6 +554,7 @@ pub fn apply_config(
             test: Some(test),
             written_files: vec![],
             api_update: None,
+            post_command: None,
         });
     }
 
@@ -605,10 +607,27 @@ pub fn apply_config(
     } else {
         None
     };
-    let message = match &api_update {
+    let mut message = match &api_update {
         Some(u) if !u.ok => "配置已写入；API 热更新未完全成功，见下方明细".to_string(),
         _ => "配置已写入".to_string(),
     };
+
+    let mut post_command = None;
+    if let Some(cmd) = profile
+        .post_apply_command
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        let cwd = if meta.is_dir() { Some(path) } else { path.parent() };
+        post_command = Some(match xray::run_shell(cmd, cwd, Duration::from_secs(60)) {
+            Ok(out) => out,
+            Err(e) => CommandOutput { code: -1, stdout: String::new(), stderr: e },
+        });
+        if post_command.as_ref().map(|o| o.code).unwrap_or(-1) != 0 {
+            message.push_str("；应用后命令执行失败");
+        }
+    }
 
     Ok(ApplyResult {
         ok: true,
@@ -616,5 +635,6 @@ pub fn apply_config(
         test: Some(test),
         written_files,
         api_update,
+        post_command,
     })
 }

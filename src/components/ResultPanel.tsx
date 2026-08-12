@@ -71,6 +71,31 @@ export default function ResultPanel() {
       />
     ) : null;
 
+  const postCommandBlock = r.postCommand ? (
+    <Collapse
+      size="small"
+      style={{ marginTop: 8 }}
+      items={[
+        {
+          key: "post",
+          label: `应用后命令（${r.postCommand.code === 0 ? "成功" : "失败"}）`,
+          children: (
+            <>
+              <Typography.Paragraph type="secondary" style={{ marginBottom: 4 }}>
+                退出码 {r.postCommand.code}
+              </Typography.Paragraph>
+              <pre className="result-pre">
+                {r.postCommand.stdout || "(无 stdout)"}
+                {"\n--- stderr ---\n"}
+                {r.postCommand.stderr || "(无 stderr)"}
+              </pre>
+            </>
+          ),
+        },
+      ]}
+    />
+  ) : null;
+
   return (
     <Alert
       type={r.ok ? "success" : "error"}
@@ -86,6 +111,7 @@ export default function ResultPanel() {
           )}
           {r.test && !r.test.ok && <TestDetail title="配置校验失败" result={r.test} />}
           {apiBlocks}
+          {postCommandBlock}
         </>
       }
     />

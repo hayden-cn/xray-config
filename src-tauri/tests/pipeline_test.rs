@@ -22,6 +22,7 @@ fn profile(dir: &Path) -> Profile {
         path: dir.to_string_lossy().into_owned(),
         api_address: None,
         xray_path: Some(bin.to_string_lossy().into_owned()),
+        post_apply_command: None,
     }
 }
 
@@ -63,4 +64,24 @@ fn invalid_json_tab_fails_test() {
         .err()
         .expect("非法 JSON 应返回错误");
     assert!(err.contains("出站") || err.contains("JSON"), "错误信息: {}", err);
+}
+
+#[cfg(windows)]
+#[test]
+fn apply_runs_post_apply_command() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut p = profile(dir.path());
+    let marker = dir.path().join("post.txt");
+    p.post_apply_command = Some(format!("cmd /C echo done > \"{}\"", marker.display()));
+    let r = pipeline::apply_config(
+        &p,
+        None,
+        &sample_tabs(),
+        &xray_config_lib::models::default_template(),
+    )
+    .expect("apply_config 应能运行");
+    assert!(r.ok, "应用失败: {}", r.message);
+    let out = r.post_command.expect("应执行应用后命令");
+    assert_eq!(out.code, 0, "命令失败: {}", out.stderr);
+    assert!(marker.exists(), "命令应在 profile 目录执行并写入文件");
 }

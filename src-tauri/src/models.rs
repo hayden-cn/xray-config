@@ -10,6 +10,8 @@ pub struct Profile {
     pub api_address: Option<String>,
     #[serde(default)]
     pub xray_path: Option<String>,
+    #[serde(default)]
+    pub post_apply_command: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -77,6 +79,8 @@ pub struct ApplyResult {
     pub test: Option<TestResult>,
     pub written_files: Vec<String>,
     pub api_update: Option<ApiUpdateResult>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub post_command: Option<CommandOutput>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

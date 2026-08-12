@@ -1,6 +1,6 @@
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -60,14 +60,17 @@ pub fn run_with_timeout(
     args: &[String],
     timeout: Duration,
 ) -> Result<CommandOutput, String> {
-    let mut child = Command::new(bin)
+    let child = Command::new(bin)
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| format!("启动 xray 失败: {}", e))?;
+    collect_output(child, timeout)
+}
 
+fn collect_output(mut child: Child, timeout: Duration) -> Result<CommandOutput, String> {
     let stdout_pipe = child.stdout.take();
     let stderr_pipe = child.stderr.take();
 
@@ -103,11 +106,11 @@ pub fn run_with_timeout(
                 if Instant::now() >= deadline {
                     let _ = child.kill();
                     let _ = child.wait();
-                    return Err("xray 命令执行超时".into());
+                    return Err("命令执行超时".into());
                 }
                 thread::sleep(Duration::from_millis(50));
             }
-            Err(e) => return Err(format!("等待 xray 进程失败: {}", e)),
+            Err(e) => return Err(format!("等待进程失败: {}", e)),
         }
     };
 
@@ -119,6 +122,39 @@ pub fn run_with_timeout(
         stdout: out_buf.lock().map(|g| g.clone()).unwrap_or_default(),
         stderr: err_buf.lock().map(|g| g.clone()).unwrap_or_default(),
     })
+}
+
+pub fn run_shell(
+    command: &str,
+    cwd: Option<&Path>,
+    timeout: Duration,
+) -> Result<CommandOutput, String> {
+    let mut cmd = shell_command(command);
+    cmd.stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    if let Some(dir) = cwd {
+        cmd.current_dir(dir);
+    }
+    let child = cmd.spawn().map_err(|e| format!("启动命令失败: {}", e))?;
+    collect_output(child, timeout)
+}
+
+#[cfg(windows)]
+fn shell_command(command: &str) -> Command {
+    use std::os::windows::process::CommandExt;
+    let mut c = Command::new("cmd.exe");
+    c.raw_arg("/S")
+        .raw_arg("/C")
+        .raw_arg(&format!("\"{}\"", command));
+    c
+}
+
+#[cfg(not(windows))]
+fn shell_command(command: &str) -> Command {
+    let mut c = Command::new("sh");
+    c.arg("-c").arg(command);
+    c
 }
 
 pub fn generate_uuid(bin: &Path) -> Result<String, String> {

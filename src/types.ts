@@ -4,6 +4,7 @@ export interface Profile {
   path: string;
   apiAddress?: string | null;
   xrayPath?: string | null;
+  postApplyCommand?: string | null;
 }
 
 export interface TemplateEntry {
@@ -54,6 +55,13 @@ export interface ApplyResult {
   test?: TestResult | null;
   writtenFiles: string[];
   apiUpdate?: ApiUpdateResult | null;
+  postCommand?: CommandOutput | null;
+}
+
+export interface CommandOutput {
+  code: number;
+  stdout: string;
+  stderr: string;
 }
 
 export interface X25519Result {
