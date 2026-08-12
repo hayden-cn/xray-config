@@ -1,5 +1,11 @@
-import { App, Button, List, Modal, Space, Tag } from "antd";
-import { DeleteOutlined, EditOutlined, PlusOutlined } from "@ant-design/icons";
+import { App, Button, List, Modal, Space, Tag, Tooltip } from "antd";
+import {
+  ArrowDownOutlined,
+  ArrowUpOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  PlusOutlined,
+} from "@ant-design/icons";
 import { useAppStore } from "../store";
 import { truncateMiddle } from "../utils";
 import ScrollArea from "./ScrollArea";
@@ -37,6 +43,14 @@ export default function ProfileManagerModal({
     });
   };
 
+  const moveProfile = async (index: number, dir: -1 | 1) => {
+    const j = index + dir;
+    if (j < 0 || j >= profiles.length) return;
+    const next = [...profiles];
+    [next[index], next[j]] = [next[j], next[index]];
+    await useAppStore.getState().saveProfiles(next);
+  };
+
   return (
     <Modal
       open={open}
@@ -50,9 +64,27 @@ export default function ProfileManagerModal({
         <List
           dataSource={profiles}
           locale={{ emptyText: "暂无 Profile，点击下方「新建 Profile」创建" }}
-          renderItem={(p) => (
+          renderItem={(p, index) => (
             <List.Item
               actions={[
+                <Tooltip title="上移" key="up">
+                  <Button
+                    size="small"
+                    type="text"
+                    icon={<ArrowUpOutlined />}
+                    disabled={index === 0}
+                    onClick={() => moveProfile(index, -1)}
+                  />
+                </Tooltip>,
+                <Tooltip title="下移" key="down">
+                  <Button
+                    size="small"
+                    type="text"
+                    icon={<ArrowDownOutlined />}
+                    disabled={index === profiles.length - 1}
+                    onClick={() => moveProfile(index, 1)}
+                  />
+                </Tooltip>,
                 <Button key="edit" size="small" icon={<EditOutlined />} onClick={() => onEdit(p)}>
                   编辑
                 </Button>,
