@@ -330,6 +330,84 @@ function setStrArr(settings: Record<string, unknown>, key: string, v: string[] |
   }
 }
 
+interface ParsedWireguardConf {
+  secretKey?: string;
+  address?: string[];
+  mtu?: number;
+  peers: WireguardOutboundPeerFormValues[];
+}
+
+/** 解析 WireGuard 客户端配置文件 (.conf) 的 [Interface] / [Peer] 节 */
+function parseWireguardConf(text: string): ParsedWireguardConf {
+  let section = "";
+  let peerIndex = -1;
+  const peers: WireguardOutboundPeerFormValues[] = [];
+  let secretKey: string | undefined;
+  let address: string[] | undefined;
+  let mtu: number | undefined;
+
+  const setVal = (key: string, value: string) => {
+    const v = value.trim();
+    if (!v) return;
+    if (section === "interface") {
+      if (key === "privatekey") secretKey = v;
+      else if (key === "address") address = v.split(",").map((s) => s.trim()).filter(Boolean);
+      else if (key === "mtu") {
+        const n = Number(v);
+        if (!Number.isNaN(n)) mtu = n;
+      }
+    } else if (section === "peer") {
+      const peer = peers[peerIndex];
+      if (!peer) return;
+      if (key === "publickey") peer.publicKey = v;
+      else if (key === "endpoint") peer.endpoint = v;
+      else if (key === "presharedkey") peer.preSharedKey = v;
+      else if (key === "allowedips") peer.allowedIPs = v.split(",").map((s) => s.trim()).filter(Boolean);
+      else if (key === "persistentkeepalive") {
+        const n = Number(v);
+        if (!Number.isNaN(n)) peer.keepAlive = n;
+      }
+    }
+  };
+
+  const text0 = text.replace(/^\uFEFF/, "");
+  for (const rawLine of text0.split(/\r\n|\r|\n/)) {
+    const line = rawLine.split("#")[0].trim();
+    if (!line) continue;
+    const sectionMatch = line.match(/^\[([^\]]+)\]/);
+    if (sectionMatch) {
+      section = sectionMatch[1].trim().toLowerCase();
+      if (section === "peer") {
+        peerIndex++;
+        peers.push({ endpoint: "", publicKey: "", preSharedKey: "", allowedIPs: [], keepAlive: undefined });
+      }
+      continue;
+    }
+    const eq = line.indexOf("=");
+    const colon = line.indexOf(":");
+    const sep = eq < 0 ? colon : colon < 0 ? eq : Math.min(eq, colon);
+    if (sep < 0) continue;
+    const key = line.slice(0, sep).trim().toLowerCase();
+    const value = line.slice(sep + 1);
+    setVal(key, value);
+  }
+
+  return {
+    secretKey,
+    address,
+    mtu,
+    peers: peers
+      .map((p) => ({
+        endpoint: p.endpoint ?? "",
+        publicKey: p.publicKey ?? "",
+        preSharedKey: p.preSharedKey ?? "",
+        allowedIPs: p.allowedIPs ?? [],
+        keepAlive: p.keepAlive,
+      }))
+      .filter((p) => p.publicKey || p.endpoint || (p.allowedIPs ?? []).length > 0),
+  };
+}
+
 function mapOutboundPeers(v: unknown): WireguardOutboundPeerFormValues[] {
   if (!Array.isArray(v)) return [];
   return v.map((p) => {
@@ -411,8 +489,6 @@ interface WireguardOutboundPeerModalProps {
 
 function WireguardOutboundPeerModal({ open, initial, onClose, onSave }: WireguardOutboundPeerModalProps) {
   const [form] = Form.useForm<WireguardOutboundPeerFormValues>();
-  const { message } = App.useApp();
-  const [keyFileLoading, setKeyFileLoading] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -424,20 +500,6 @@ function WireguardOutboundPeerModal({ open, initial, onClose, onSave }: Wireguar
       keepAlive: typeof initial?.keepAlive === "number" ? initial.keepAlive : undefined,
     });
   }, [open, initial, form]);
-
-  const handleSelectKeyFile = async () => {
-    const res = await openDialog({ multiple: false, directory: false });
-    if (typeof res !== "string" || !res) return;
-    setKeyFileLoading(true);
-    try {
-      const content = await api.readTextFile(res);
-      form.setFieldValue("publicKey", content.trim());
-    } catch (e) {
-      message.error(String(e));
-    } finally {
-      setKeyFileLoading(false);
-    }
-  };
 
   const handleSave = async () => {
     const values = await form.validateFields();
@@ -472,26 +534,13 @@ function WireguardOutboundPeerModal({ open, initial, onClose, onSave }: Wireguar
             <Input placeholder="例如 engage.cloudflareclient.com:2408" />
           </Form.Item>
           <Form.Item
+            name="publicKey"
             label="服务器公钥 (publicKey)"
             required
-            tooltip="必填，用于验证；可点击右侧按钮从公钥文件读取"
+            tooltip="必填，用于验证"
+            rules={[{ required: true, message: "请输入公钥" }]}
           >
-            <Space.Compact style={{ width: "100%" }}>
-              <Form.Item
-                name="publicKey"
-                noStyle
-                rules={[{ required: true, message: "请输入公钥" }]}
-              >
-                <Input placeholder="WireGuard 公钥" />
-              </Form.Item>
-              <Button
-                icon={<FileTextOutlined />}
-                loading={keyFileLoading}
-                onClick={handleSelectKeyFile}
-              >
-                选择文件
-              </Button>
-            </Space.Compact>
+            <Input placeholder="WireGuard 公钥" />
           </Form.Item>
           <Form.Item name="preSharedKey" label="预共享密钥 (preSharedKey)" tooltip="额外的对称加密密钥，默认全 0">
             <Input placeholder="预共享密钥（可选）" />
@@ -518,24 +567,38 @@ export default function OutboundEditModal({ open, initial, onClose, onSave }: Ou
   const [wgPeers, setWgPeers] = useState<WireguardOutboundPeerFormValues[]>([]);
   const [peerModalOpen, setPeerModalOpen] = useState(false);
   const [editingPeerIndex, setEditingPeerIndex] = useState<number | null>(null);
-  const [keyFileLoading, setKeyFileLoading] = useState(false);
+  const [wgImportLoading, setWgImportLoading] = useState(false);
   const { message } = App.useApp();
 
   const store = useAppStore();
   const inboundTags = extractTags(store.sections["inbounds"] ?? "");
   const outboundTags = extractTags(store.sections["outbounds"] ?? "");
 
-  const handleSelectKeyFile = async () => {
+  const handleImportWgConf = async () => {
     const res = await openDialog({ multiple: false, directory: false });
     if (typeof res !== "string" || !res) return;
-    setKeyFileLoading(true);
+    setWgImportLoading(true);
     try {
       const content = await api.readTextFile(res);
-      form.setFieldValue("wgSecretKey", content.trim());
+      const parsed = parseWireguardConf(content);
+      if (!parsed.secretKey && (!parsed.peers || parsed.peers.length === 0)) {
+        message.error("未识别到有效的 WireGuard 配置");
+        return;
+      }
+      const patch: OutboundFormValues = {};
+      if (parsed.secretKey) patch.wgSecretKey = parsed.secretKey;
+      if (parsed.address && parsed.address.length > 0) patch.wgAddress = parsed.address;
+      if (typeof parsed.mtu === "number") patch.wgMtu = parsed.mtu;
+      form.setFieldsValue(patch);
+      if (parsed.peers.length > 0) {
+        setWgPeers(parsed.peers);
+        setEditingPeerIndex(null);
+      }
+      message.success("已从 WireGuard 配置文件导入");
     } catch (e) {
       message.error(String(e));
     } finally {
-      setKeyFileLoading(false);
+      setWgImportLoading(false);
     }
   };
 
@@ -1279,26 +1342,27 @@ export default function OutboundEditModal({ open, initial, onClose, onSave }: Ou
                 ) : isWg ? (
                   <>
                     <Form.Item
+                      style={{ marginBottom: 8 }}
+                      label="从文件导入"
+                      tooltip="选择 WireGuard 客户端配置文件 (.conf)，自动填入私钥、本机地址、MTU 与对端信息"
+                    >
+                      <Button
+                        icon={<FileTextOutlined />}
+                        loading={wgImportLoading}
+                        onClick={handleImportWgConf}
+                        block
+                      >
+                        从文件导入
+                      </Button>
+                    </Form.Item>
+                    <Form.Item
+                      name="wgSecretKey"
                       label="私钥 (secretKey)"
                       required
-                      tooltip="本机 WireGuard 私钥，必填；可点击右侧按钮从私钥文件读取"
+                      tooltip="本机 WireGuard 私钥，必填"
+                      rules={[{ required: true, message: "请输入私钥" }]}
                     >
-                      <Space.Compact style={{ width: "100%" }}>
-                        <Form.Item
-                          name="wgSecretKey"
-                          noStyle
-                          rules={[{ required: true, message: "请输入私钥" }]}
-                        >
-                          <Input placeholder="WireGuard 私钥" />
-                        </Form.Item>
-                        <Button
-                          icon={<FileTextOutlined />}
-                          loading={keyFileLoading}
-                          onClick={handleSelectKeyFile}
-                        >
-                          选择文件
-                        </Button>
-                      </Space.Compact>
+                      <Input placeholder="WireGuard 私钥" />
                     </Form.Item>
                     <Form.Item
                       name="wgAddress"
