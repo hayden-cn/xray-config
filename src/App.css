@@ -178,6 +178,10 @@ body {
   padding: 0 16px 12px;
 }
 
+.observatory-form {
+  padding: 0 16px 12px;
+}
+
 .json-editor {
   border: 1px solid var(--border-color);
   border-radius: 4px;

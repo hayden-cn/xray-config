@@ -5,9 +5,11 @@ import type { LayoutTab } from "../layout";
 import { sectionUri } from "../schema";
 import { useAppStore } from "../store";
 import BalancerForm from "./BalancerForm";
+import BurstObservatoryForm from "./BurstObservatoryForm";
 import InboundForm from "./InboundForm";
 import OutboundForm from "./OutboundForm";
 import LogForm from "./LogForm";
+import ObservatoryForm from "./ObservatoryForm";
 import RoutingForm from "./RoutingForm";
 import RoutingRulesForm from "./RoutingRulesForm";
 import ScrollArea from "./ScrollArea";
@@ -66,6 +68,10 @@ export default function ConfigTabs() {
               <LogForm key={c.key} label={c.label} />
             ) : c.key === "routing" ? (
               <RoutingForm key={c.key} label={c.label} />
+            ) : c.key === "observatory" ? (
+              <ObservatoryForm key={c.key} label={c.label} />
+            ) : c.key === "burstObservatory" ? (
+              <BurstObservatoryForm key={c.key} label={c.label} />
             ) : (
               <SectionCard
                 key={c.key}

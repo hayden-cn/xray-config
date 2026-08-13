@@ -18,6 +18,14 @@ export const layouts: LayoutTab[] = [
   { key: "rules", label: "路由规则", children: [{ key: "routing.rules" }] },
   { key: "balancers", label: "负载均衡", children: [{ key: "routing.balancers" }] },
   {
+    key: "observatory",
+    label: "观测",
+    children: [
+      { key: "observatory", label: "常规观测" },
+      { key: "burstObservatory", label: "突发观测" },
+    ],
+  },
+  {
     key: "other",
     label: "其他",
     children: [
@@ -29,8 +37,6 @@ export const layouts: LayoutTab[] = [
       { key: "policy", label: "策略" },
       { key: "stats", label: "统计" },
       { key: "metrics", label: "指标" },
-      { key: "observatory", label: "观测" },
-      { key: "burstObservatory", label: "突发观测" },
       { key: "geodata", label: "GeoData" },
       { key: "env", label: "环境" },
       { key: "version", label: "版本" },
