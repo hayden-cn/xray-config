@@ -218,16 +218,81 @@ fn strip_typed_message(v: &mut Value) {
     }
 }
 
+// `xray run -dump` 会把 protobuf 默认值展开为 JSON；其中的数值 0
+// 可能与输入配置的类型不同（例如 duration 被展开成数字 0），不能直接回灌。
+fn strip_dump_defaults(v: &mut Value) {
+    match v {
+        Value::Object(m) => {
+            let keys: Vec<String> = m
+                .iter_mut()
+                .filter_map(|(key, value)| {
+                    strip_dump_defaults(value);
+                    let removable = match value {
+                        Value::Null => true,
+                        Value::Bool(false) => true,
+                        Value::Number(n) => n.as_i64() == Some(0) || n.as_u64() == Some(0),
+                        Value::String(s) => s.is_empty(),
+                        Value::Array(items) => items.is_empty(),
+                        Value::Object(items) => items.is_empty(),
+                        _ => false,
+                    };
+                    removable.then(|| key.clone())
+                })
+                .collect();
+            for key in keys {
+                m.remove(&key);
+            }
+        }
+        Value::Array(items) => {
+            for item in items.iter_mut() {
+                strip_dump_defaults(item);
+            }
+            items.retain(|item| !matches!(item, Value::Null));
+        }
+        _ => {}
+    }
+}
+
 fn normalize_dump(text: &str) -> Result<String, String> {
     let mut v: Value =
         serde_json::from_str(text).map_err(|e| format!("dump 输出解析失败: {}", e))?;
     strip_typed_message(&mut v);
+    strip_dump_defaults(&mut v);
     if let Value::Object(m) = &mut v {
         if let Some(fd) = m.remove("fakeDns") {
             m.insert("fakedns".into(), fd);
         }
     }
     serde_json::to_string_pretty(&v).map_err(|e| format!("dump 输出序列化失败: {}", e))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_dump;
+
+    #[test]
+    fn normalize_dump_removes_protobuf_defaults() {
+        let normalized = normalize_dump(
+            r#"{
+                "observatory": { "probeInterval": 0, "enableConcurrency": false },
+                "outbounds": [{
+                    "streamSettings": {
+                        "port": 0,
+                        "xhttpSettings": { "path": "/", "xmux": { "maxConcurrency": 0 } }
+                    },
+                    "settings": { "udp": true }
+                }]
+            }"#,
+        )
+        .unwrap();
+
+        assert!(!normalized.contains("\"probeInterval\""));
+        assert!(!normalized.contains("\"enableConcurrency\""));
+        assert!(!normalized.contains("\"port\""));
+        assert!(!normalized.contains("\"maxConcurrency\""));
+        assert!(normalized.contains("\"path\""));
+        assert!(normalized.contains("\"udp\""));
+    }
 }
 
 fn read_plain(profile: &Profile, default_xray: Option<&str>) -> Result<ReadConfigResult, String> {
