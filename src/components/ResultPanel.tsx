@@ -1,17 +1,19 @@
 import { Alert, Collapse, Typography } from "antd";
 import { useAppStore } from "../store";
+import { testSummary } from "../resultSummary";
 import type { ApplyResult, TestResult } from "../types";
 
-function TestDetail({ title, result }: { title: string; result: TestResult }) {
+export function TestDetail({ title, result }: { title: string; result: TestResult }) {
   const hasOutput = result.stdout.trim() !== "" || result.stderr.trim() !== "";
+  const summary = testSummary(result);
   return (
     <Alert
-      type={result.ok ? "success" : "error"}
+      type={summary.status}
       showIcon
       message={title}
       description={
         <>
-          <div>{result.message || (result.ok ? "配置有效" : "配置无效")}</div>
+          <div style={{ whiteSpace: "pre-wrap" }}>{summary.text}</div>
           {hasOutput && (
             <Collapse
               size="small"
@@ -19,7 +21,7 @@ function TestDetail({ title, result }: { title: string; result: TestResult }) {
               items={[
                 {
                   key: "out",
-                  label: "输出",
+                  label: "原始输出",
                   children: (
                     <pre className="result-pre">
                       {result.stdout || "(无 stdout)"}
