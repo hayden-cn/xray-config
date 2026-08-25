@@ -44,6 +44,7 @@ interface SectionListFormProps<T> {
   emptyText?: string;
   deleteConfirmTitle?: string;
   extraActions?: (item: T, index: number) => ReactNode;
+  headerExtra?: ReactNode;
 }
 
 /** 对象数组类 section 的通用列表表单容器（form/json 双模式 + 增删改排序） */
@@ -58,6 +59,7 @@ export default function SectionListForm<T>({
   emptyText = "暂无数据，点击右上角「新增」创建",
   deleteConfirmTitle = "删除这条记录？",
   extraActions,
+  headerExtra,
 }: SectionListFormProps<T>) {
   const [mode, setMode] = useState<"form" | "json">("form");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -118,6 +120,7 @@ export default function SectionListForm<T>({
           {mode === "json" && errorCount > 0 && <Tag color="error">{errorCount}</Tag>}
         </Space>
         <Space size={4}>
+          {headerExtra}
           <Button size="small" type="primary" icon={<PlusOutlined />} onClick={openAdd}>
             新增
           </Button>
