@@ -5,6 +5,7 @@ export interface Profile {
   apiAddress?: string | null;
   xrayPath?: string | null;
   postApplyCommand?: string | null;
+  serverAddress?: string | null;
 }
 
 export interface TemplateEntry {

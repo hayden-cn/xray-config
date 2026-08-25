@@ -43,6 +43,7 @@ interface SectionListFormProps<T> {
   EditModal: ComponentType<SectionListEditModalProps<T>>;
   emptyText?: string;
   deleteConfirmTitle?: string;
+  extraActions?: (item: T, index: number) => ReactNode;
 }
 
 /** 对象数组类 section 的通用列表表单容器（form/json 双模式 + 增删改排序） */
@@ -56,6 +57,7 @@ export default function SectionListForm<T>({
   EditModal,
   emptyText = "暂无数据，点击右上角「新增」创建",
   deleteConfirmTitle = "删除这条记录？",
+  extraActions,
 }: SectionListFormProps<T>) {
   const [mode, setMode] = useState<"form" | "json">("form");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -161,6 +163,7 @@ export default function SectionListForm<T>({
                   <span className="rule-index">{i + 1}</span>
                   {renderItem(item)}
                   <div className="rule-card-actions">
+                    {extraActions?.(item, i)}
                     <Tooltip title="上移">
                       <Button
                         size="small"

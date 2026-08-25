@@ -19,6 +19,7 @@ interface FormValues {
   apiAddress?: string;
   xrayPath?: string;
   postApplyCommand?: string;
+  serverAddress?: string;
 }
 
 export default function ProfileModal({ open, onClose, profile, onSaved }: ProfileModalProps) {
@@ -35,6 +36,7 @@ export default function ProfileModal({ open, onClose, profile, onSaved }: Profil
       apiAddress: profile?.apiAddress ?? "",
       xrayPath: profile?.xrayPath ?? "",
       postApplyCommand: profile?.postApplyCommand ?? "",
+      serverAddress: profile?.serverAddress ?? "",
     });
   }, [open, profile, form]);
 
@@ -59,6 +61,7 @@ export default function ProfileModal({ open, onClose, profile, onSaved }: Profil
         apiAddress: values.apiAddress?.trim() || null,
         xrayPath: values.xrayPath?.trim() || null,
         postApplyCommand: values.postApplyCommand?.trim() || null,
+        serverAddress: values.serverAddress?.trim() || null,
       };
       const store = useAppStore.getState();
       const next = profile
@@ -154,6 +157,13 @@ export default function ProfileModal({ open, onClose, profile, onSaved }: Profil
           tooltip="填写后读取时校验、应用时热更新。例如 127.0.0.1:8080"
         >
           <Input placeholder="127.0.0.1:8080" />
+        </Form.Item>
+        <Form.Item
+          name="serverAddress"
+          label="服务器地址（分享用，可选）"
+          tooltip="生成入站分享链接时作为服务器地址，例如 example.com 或 1.2.3.4"
+        >
+          <Input placeholder="example.com" />
         </Form.Item>
         <Form.Item
           label="xray 可执行文件（可选）"

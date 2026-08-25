@@ -12,6 +12,8 @@ pub struct Profile {
     pub xray_path: Option<String>,
     #[serde(default)]
     pub post_apply_command: Option<String>,
+    #[serde(default)]
+    pub server_address: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
