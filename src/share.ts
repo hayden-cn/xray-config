@@ -18,6 +18,15 @@ function strArr(v: unknown): string[] {
   return Array.isArray(v) ? v.map(String).filter(Boolean) : [];
 }
 
+function firstStr(v: unknown): string {
+  if (typeof v === "string") return v;
+  if (!Array.isArray(v)) return "";
+  for (const item of v) {
+    if (typeof item === "string" && item) return item;
+  }
+  return "";
+}
+
 function b64(s: string): string {
   return btoa(unescape(encodeURIComponent(s)));
 }
@@ -60,13 +69,13 @@ function streamParams(stream?: Record<string, unknown>): Record<string, string> 
     if (str(kcp.seed)) p.seed = str(kcp.seed);
   } else if (method === "httpupgrade" && isObj(httpupgrade)) {
     if (str(httpupgrade.path)) p.path = str(httpupgrade.path);
-    const huHosts = strArr(httpupgrade.host);
-    if (huHosts.length > 0) p.host = huHosts[0];
+    const huHost = firstStr(httpupgrade.host);
+    if (huHost) p.host = huHost;
   } else if (method === "xhttp" && isObj(xhttp)) {
     if (str(xhttp.mode)) p.mode = str(xhttp.mode);
     if (str(xhttp.path)) p.path = str(xhttp.path);
-    const xhost = strArr(xhttp.host);
-    if (xhost.length > 0) p.host = xhost[0];
+    const xhost = firstStr(xhttp.host);
+    if (xhost) p.host = xhost;
   } else if (method === "raw" && isObj(raw)) {
     const rawHeader = isObj(raw.header) ? raw.header : undefined;
     if (rawHeader && str(rawHeader.type) && str(rawHeader.type) !== "none") {
@@ -314,13 +323,13 @@ function buildStreamFromParams(
   } else if (method === "httpupgrade") {
     const hu: Record<string, unknown> = {};
     if (params.path) hu.path = params.path;
-    if (params.host) hu.host = [params.host];
+    if (params.host) hu.host = params.host;
     if (Object.keys(hu).length > 0) stream.httpupgradeSettings = hu;
   } else if (method === "xhttp") {
     const xh: Record<string, unknown> = {};
     if (params.mode) xh.mode = params.mode;
     if (params.path) xh.path = params.path;
-    if (params.host) xh.host = [params.host];
+    if (params.host) xh.host = params.host;
     if (Object.keys(xh).length > 0) stream.xhttpSettings = xh;
   } else if (method === "raw") {
     if (params.headerType && params.headerType !== "none") {
@@ -425,12 +434,12 @@ function parseVmess(raw: string): OutboundObject | null {
   } else if (method === "httpupgrade") {
     const hu: Record<string, unknown> = {};
     if (path) hu.path = path;
-    if (host) hu.host = [host];
+    if (host) hu.host = host;
     if (Object.keys(hu).length > 0) stream.httpupgradeSettings = hu;
   } else if (method === "xhttp") {
     const xh: Record<string, unknown> = {};
     if (path) xh.path = path;
-    if (host) xh.host = [host];
+    if (host) xh.host = host;
     if (Object.keys(xh).length > 0) stream.xhttpSettings = xh;
   }
 
