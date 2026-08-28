@@ -232,6 +232,38 @@ body {
   background: var(--section-head-bg);
 }
 
+.rule-card.dragging,
+.profile-manager-body .ant-list-item.dragging {
+  opacity: 0.55;
+}
+
+.rule-card.drag-over,
+.profile-manager-body .ant-list-item.drag-over {
+  border-color: #1677ff;
+  background: color-mix(in srgb, #1677ff 8%, var(--section-head-bg));
+}
+
+.drag-handle {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  cursor: grab;
+  color: var(--text-secondary);
+  touch-action: none;
+  user-select: none;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.drag-handle:hover {
+  color: var(--text-tertiary);
+}
+
 .rule-index {
   flex: none;
   width: 20px;
@@ -420,6 +452,16 @@ body {
 /* profile manager list */
 .profile-manager-body {
   padding: 4px 0;
+}
+
+.profile-manager-body .ant-list-item {
+  padding-inline: 8px;
+  transition: opacity 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+  border: 1px solid transparent;
+}
+
+.profile-manager-body .ant-list-item-meta {
+  min-width: 0;
 }
 
 .profile-path {
