@@ -1,11 +1,11 @@
-import { App, Button, List, Modal, Space, Tag, Tooltip } from "antd";
+import { App, Button, List, Modal, Space, Tag } from "antd";
 import {
-  ArrowDownOutlined,
-  ArrowUpOutlined,
   DeleteOutlined,
   EditOutlined,
+  HolderOutlined,
   PlusOutlined,
 } from "@ant-design/icons";
+import { useRef, useState } from "react";
 import { useAppStore } from "../store";
 import { truncateMiddle } from "../utils";
 import ScrollArea from "./ScrollArea";
@@ -26,6 +26,10 @@ export default function ProfileManagerModal({
 }: ProfileManagerModalProps) {
   const { modal, message } = App.useApp();
   const { profiles, currentProfileId } = useAppStore();
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const draggingIdRef = useRef<string | null>(null);
+  const dragOverIdRef = useRef<string | null>(null);
 
   const handleDelete = (p: Profile) => {
     modal.confirm({
@@ -43,12 +47,56 @@ export default function ProfileManagerModal({
     });
   };
 
-  const moveProfile = async (index: number, dir: -1 | 1) => {
-    const j = index + dir;
-    if (j < 0 || j >= profiles.length) return;
+  const handleDrop = async (sourceId: string, targetId: string) => {
+    if (!sourceId || sourceId === targetId) return;
+    const sourceIndex = profiles.findIndex((p) => p.id === sourceId);
+    const targetIndex = profiles.findIndex((p) => p.id === targetId);
+    if (sourceIndex < 0 || targetIndex < 0) return;
     const next = [...profiles];
-    [next[index], next[j]] = [next[j], next[index]];
+    [next[sourceIndex], next[targetIndex]] = [next[targetIndex], next[sourceIndex]];
     await useAppStore.getState().saveProfiles(next);
+  };
+
+  const clearDragState = () => {
+    setDraggingId(null);
+    setDragOverId(null);
+    draggingIdRef.current = null;
+    dragOverIdRef.current = null;
+  };
+
+  const handlePointerDown = (event: React.PointerEvent<HTMLElement>, id: string) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    draggingIdRef.current = id;
+    dragOverIdRef.current = id;
+    setDraggingId(id);
+    setDragOverId(id);
+
+    const update = (clientX: number, clientY: number) => {
+      const target = document.elementFromPoint(clientX, clientY)?.closest("[data-profile-id]");
+      const targetId = (target as HTMLElement | null)?.dataset.profileId ?? null;
+      if (!targetId || targetId === dragOverIdRef.current) return;
+      dragOverIdRef.current = targetId;
+      setDragOverId(targetId);
+    };
+
+    const onMove = (moveEvent: PointerEvent) => {
+      update(moveEvent.clientX, moveEvent.clientY);
+    };
+
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      const sourceId = draggingIdRef.current;
+      const targetId = dragOverIdRef.current;
+      if (sourceId && targetId && sourceId !== targetId) void handleDrop(sourceId, targetId);
+      clearDragState();
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
   };
 
   return (
@@ -64,27 +112,11 @@ export default function ProfileManagerModal({
         <List
           dataSource={profiles}
           locale={{ emptyText: "暂无 Profile，点击下方「新建 Profile」创建" }}
-          renderItem={(p, index) => (
+          renderItem={(p) => (
             <List.Item
+              data-profile-id={p.id}
+              className={`${draggingId === p.id ? "dragging" : ""}${dragOverId === p.id ? " drag-over" : ""}`}
               actions={[
-                <Tooltip title="上移" key="up">
-                  <Button
-                    size="small"
-                    type="text"
-                    icon={<ArrowUpOutlined />}
-                    disabled={index === 0}
-                    onClick={() => moveProfile(index, -1)}
-                  />
-                </Tooltip>,
-                <Tooltip title="下移" key="down">
-                  <Button
-                    size="small"
-                    type="text"
-                    icon={<ArrowDownOutlined />}
-                    disabled={index === profiles.length - 1}
-                    onClick={() => moveProfile(index, 1)}
-                  />
-                </Tooltip>,
                 <Button key="edit" size="small" icon={<EditOutlined />} onClick={() => onEdit(p)}>
                   编辑
                 </Button>,
@@ -118,6 +150,15 @@ export default function ProfileManagerModal({
                   </>
                 }
               />
+              <span
+                className="drag-handle"
+                role="button"
+                aria-label="拖拽排序"
+                title="拖拽排序"
+                onPointerDown={(event) => handlePointerDown(event, p.id)}
+              >
+                <HolderOutlined />
+              </span>
             </List.Item>
           )}
         />

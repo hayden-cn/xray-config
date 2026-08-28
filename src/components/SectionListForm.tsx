@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ComponentType, ReactNode } from "react";
 import {
   Alert,
@@ -11,12 +11,11 @@ import {
   Typography,
 } from "antd";
 import {
-  ArrowDownOutlined,
-  ArrowUpOutlined,
   CodeOutlined,
   DeleteOutlined,
   EditOutlined,
   FormOutlined,
+  HolderOutlined,
   PlusOutlined,
 } from "@ant-design/icons";
 import { useAppStore } from "../store";
@@ -64,6 +63,10 @@ export default function SectionListForm<T>({
   const [mode, setMode] = useState<"form" | "json">("form");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const itemsRef = useRef<T[]>([]);
+  const draggingIndexRef = useRef<number | null>(null);
 
   const raw = useAppStore((s) => s.sections[path]);
   const setSection = useAppStore((s) => s.setSection);
@@ -76,14 +79,54 @@ export default function SectionListForm<T>({
   const markers = useMarkers(sectionUri(path));
   const errorCount = markers.filter((m) => m.severity === 8).length;
 
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
+
   const write = (next: T[]) => setSection(path, format(next));
 
-  const move = (index: number, dir: -1 | 1) => {
-    const j = index + dir;
-    if (j < 0 || j >= items.length) return;
-    const next = [...items];
-    [next[index], next[j]] = [next[j], next[index]];
-    write(next);
+  const clearDragState = () => {
+    setDraggingIndex(null);
+    setDragOverIndex(null);
+    draggingIndexRef.current = null;
+  };
+
+  const handlePointerDown = (event: React.PointerEvent<HTMLElement>, index: number) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    draggingIndexRef.current = index;
+    setDraggingIndex(index);
+    setDragOverIndex(index);
+
+    const update = (clientX: number, clientY: number) => {
+      const target = document.elementFromPoint(clientX, clientY)?.closest("[data-sort-index]");
+      const targetIndex = target ? Number((target as HTMLElement).dataset.sortIndex) : NaN;
+      const sourceIndex = draggingIndexRef.current;
+      if (!Number.isInteger(targetIndex) || sourceIndex === null || targetIndex === sourceIndex) return;
+      if (targetIndex < 0 || targetIndex >= itemsRef.current.length) return;
+      const next = [...itemsRef.current];
+      [next[sourceIndex], next[targetIndex]] = [next[targetIndex], next[sourceIndex]];
+      itemsRef.current = next;
+      draggingIndexRef.current = targetIndex;
+      setDraggingIndex(targetIndex);
+      write(next);
+      setDragOverIndex(targetIndex);
+    };
+
+    const onMove = (moveEvent: PointerEvent) => {
+      update(moveEvent.clientX, moveEvent.clientY);
+    };
+
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      clearDragState();
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
   };
 
   const remove = (index: number) => write(items.filter((_, i) => i !== index));
@@ -162,29 +205,24 @@ export default function SectionListForm<T>({
           ) : (
             <Space direction="vertical" size={6} style={{ width: "100%", padding: "8px 8px 12px" }}>
               {items.map((item, i) => (
-                <div className="rule-card" key={i}>
+                <div
+                  data-sort-index={i}
+                  className={`rule-card${draggingIndex === i ? " dragging" : ""}${dragOverIndex === i ? " drag-over" : ""}`}
+                  key={i}
+                >
+                  <span
+                    className="drag-handle"
+                    role="button"
+                    aria-label="拖拽排序"
+                    title="拖拽排序"
+                    onPointerDown={(event) => handlePointerDown(event, i)}
+                  >
+                    <HolderOutlined />
+                  </span>
                   <span className="rule-index">{i + 1}</span>
                   {renderItem(item)}
                   <div className="rule-card-actions">
                     {extraActions?.(item, i)}
-                    <Tooltip title="上移">
-                      <Button
-                        size="small"
-                        type="text"
-                        icon={<ArrowUpOutlined />}
-                        disabled={i === 0}
-                        onClick={() => move(i, -1)}
-                      />
-                    </Tooltip>
-                    <Tooltip title="下移">
-                      <Button
-                        size="small"
-                        type="text"
-                        icon={<ArrowDownOutlined />}
-                        disabled={i === items.length - 1}
-                        onClick={() => move(i, 1)}
-                      />
-                    </Tooltip>
                     <Tooltip title="编辑">
                       <Button
                         size="small"
