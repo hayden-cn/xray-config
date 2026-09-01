@@ -222,7 +222,8 @@ body {
   min-height: 0;
 }
 
-.rule-card {
+.sortable-row {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -232,15 +233,11 @@ body {
   background: var(--section-head-bg);
 }
 
-.rule-card.dragging,
-.profile-manager-body .ant-list-item.dragging {
-  opacity: 0.55;
-}
-
-.rule-card.drag-over,
-.profile-manager-body .ant-list-item.drag-over {
+.sortable-row.dragging {
+  opacity: 0.45;
   border-color: #1677ff;
-  background: color-mix(in srgb, #1677ff 8%, var(--section-head-bg));
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  z-index: 10;
 }
 
 .drag-handle {
@@ -454,14 +451,32 @@ body {
   padding: 4px 0;
 }
 
-.profile-manager-body .ant-list-item {
-  padding-inline: 8px;
-  transition: opacity 0.12s ease, border-color 0.12s ease, background 0.12s ease;
-  border: 1px solid transparent;
+.profile-manager-list {
+  gap: 2px;
 }
 
-.profile-manager-body .ant-list-item-meta {
+.profile-manager-body .sortable-row {
+  padding: 10px 8px;
+  border-color: transparent;
+}
+
+.profile-manager-body .sortable-row.dragging {
+  border-color: #1677ff;
+}
+
+.profile-sort-meta {
+  flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.profile-sort-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .profile-path {
