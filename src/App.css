@@ -300,6 +300,48 @@ body {
   color: #cf1322;
 }
 
+.rule-target-select {
+  flex: none;
+  font-size: 12px;
+  white-space: nowrap;
+  max-width: 240px;
+}
+
+.rule-target-select .ant-select-selector {
+  cursor: pointer;
+}
+
+.rule-target-select.outbound {
+  color: #52c41a;
+}
+
+.rule-target-select.outbound .ant-select-selection-placeholder {
+  color: #52c41a;
+}
+
+.rule-target-select.balancer {
+  color: #d46b08;
+}
+
+.rule-target-select.balancer .ant-select-selection-placeholder {
+  color: #d46b08;
+}
+
+.rule-target-select.none {
+  color: #cf1322;
+}
+
+.rule-target-select.none .ant-select-selection-placeholder {
+  color: #cf1322;
+}
+
+.rule-target-select.outbound:hover .ant-select-selector,
+.rule-target-select.balancer:hover .ant-select-selector,
+.rule-target-select.none:hover .ant-select-selector {
+  background: rgba(128, 128, 128, 0.15);
+  border-radius: 4px;
+}
+
 .rule-card-actions {
   flex: none;
   display: flex;

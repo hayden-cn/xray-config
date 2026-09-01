@@ -40,7 +40,7 @@ interface SectionListFormProps<T> {
   unit?: string;
   parse: (text: string) => T[] | null;
   format: (list: T[]) => string;
-  renderItem: (item: T) => ReactNode;
+  renderItem: (item: T, index: number, updateItem: (next: T) => void) => ReactNode;
   EditModal: ComponentType<SectionListEditModalProps<T>>;
   emptyText?: string;
   deleteConfirmTitle?: string;
@@ -85,6 +85,9 @@ export default function SectionListForm<T>({
   };
 
   const remove = (index: number) => write(items.filter((_, i) => i !== index));
+
+  const updateItem = (index: number, next: T) =>
+    write(items.map((it, i) => (i === index ? next : it)));
 
   const openAdd = () => {
     setEditingIndex(null);
@@ -166,7 +169,7 @@ export default function SectionListForm<T>({
               renderRow={(item, i, props) => (
                 <>
                   <span className="rule-index">{i + 1}</span>
-                  {renderItem(item)}
+                  {renderItem(item, i, (next) => updateItem(i, next))}
                   <div className="rule-card-actions">
                     {extraActions?.(item, i)}
                     <Tooltip title="编辑">
