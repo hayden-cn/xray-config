@@ -1,9 +1,13 @@
+pub mod knife;
 pub mod models;
 pub mod pipeline;
 pub mod storage;
 pub mod xray;
 
-use models::{ApplyResult, Profile, ReadConfigResult, Settings, TabContents, TestResult, X25519Result};
+use models::{
+    ApplyResult, KnifeParseResult, KnifeSubscription, Profile, ReadConfigResult, Settings,
+    TabContents, TestResult, X25519Result,
+};
 use tauri::AppHandle;
 
 #[tauri::command]
@@ -59,6 +63,61 @@ fn read_text_file(path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+fn knife_resolve(settings: Settings) -> Result<Option<String>, String> {
+    match knife::find_knife(settings.default_knife_path.as_deref()) {
+        Ok(p) => Ok(Some(p.to_string_lossy().into_owned())),
+        Err(_) => Ok(None),
+    }
+}
+
+#[tauri::command]
+fn knife_list_subscriptions(settings: Settings) -> Result<Vec<KnifeSubscription>, String> {
+    let bin = knife::find_knife(settings.default_knife_path.as_deref())?;
+    knife::list_subscriptions(&bin)
+}
+
+#[tauri::command]
+fn knife_test_subscription(settings: Settings, sub_id: i64) -> Result<Vec<String>, String> {
+    let bin = knife::find_knife(settings.default_knife_path.as_deref())?;
+    knife::test_subscription(&bin, sub_id)
+}
+
+#[tauri::command]
+fn knife_parse_link(settings: Settings, link: String) -> Result<KnifeParseResult, String> {
+    let bin = knife::find_knife(settings.default_knife_path.as_deref())?;
+    knife::parse_link(&bin, &link)
+}
+
+#[tauri::command]
+fn knife_add_subscription(settings: Settings, url: String, remark: String) -> Result<(), String> {
+    let bin = knife::find_knife(settings.default_knife_path.as_deref())?;
+    knife::add_subscription(&bin, &url, &remark)
+}
+
+#[tauri::command]
+fn knife_remove_subscription(settings: Settings, id: i64) -> Result<(), String> {
+    let bin = knife::find_knife(settings.default_knife_path.as_deref())?;
+    knife::remove_subscription(&bin, id)
+}
+
+#[tauri::command]
+fn knife_update_subscription(
+    settings: Settings,
+    id: i64,
+    url: Option<String>,
+    remark: Option<String>,
+) -> Result<(), String> {
+    let bin = knife::find_knife(settings.default_knife_path.as_deref())?;
+    knife::update_subscription(&bin, id, url.as_deref(), remark.as_deref())
+}
+
+#[tauri::command]
+fn knife_fetch_subscription(settings: Settings, id: i64) -> Result<(), String> {
+    let bin = knife::find_knife(settings.default_knife_path.as_deref())?;
+    knife::fetch_subscription(&bin, id)
+}
+
+#[tauri::command]
 fn read_config(profile: Profile, settings: Settings) -> Result<ReadConfigResult, String> {
     pipeline::read_config(&profile, settings.default_xray_path.as_deref())
 }
@@ -97,6 +156,14 @@ pub fn run() {
             generate_uuid,
             generate_x25519,
             read_text_file,
+            knife_resolve,
+            knife_list_subscriptions,
+            knife_test_subscription,
+            knife_parse_link,
+            knife_add_subscription,
+            knife_remove_subscription,
+            knife_update_subscription,
+            knife_fetch_subscription,
             read_config,
             test_config,
             apply_config

@@ -23,6 +23,7 @@ fn profile(dir: &Path) -> Profile {
         api_address: None,
         xray_path: Some(bin.to_string_lossy().into_owned()),
         post_apply_command: None,
+        server_address: None,
     }
 }
 

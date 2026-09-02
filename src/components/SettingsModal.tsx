@@ -21,6 +21,7 @@ interface TemplateRow {
 
 interface FormValues {
   defaultXrayPath?: string;
+  defaultKnifePath?: string;
   theme: ThemePref;
 }
 
@@ -35,6 +36,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
     if (!open) return;
     form.setFieldsValue({
       defaultXrayPath: settings.defaultXrayPath ?? "",
+      defaultKnifePath: settings.defaultKnifePath ?? "",
       theme: settings.theme ?? "system",
     });
     const tpl =
@@ -63,6 +65,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
     try {
       await saveSettings({
         defaultXrayPath: values.defaultXrayPath?.trim() || null,
+        defaultKnifePath: values.defaultKnifePath?.trim() || null,
         defaultMultiFileTemplate: template,
         theme: values.theme ?? "system",
       });
@@ -113,6 +116,25 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
               onClick={async () => {
                 const res = await openDialog({ multiple: false, directory: false });
                 if (typeof res === "string") form.setFieldValue("defaultXrayPath", res);
+              }}
+>
+                选择
+              </Button>
+          </Space.Compact>
+        </Form.Item>
+        <Form.Item
+          label="默认 xray-knife 可执行文件（用于订阅）"
+          tooltip="未指定时在应用启动目录与系统 PATH 中查找"
+        >
+          <Space.Compact style={{ width: "100%" }}>
+            <Form.Item name="defaultKnifePath" noStyle>
+              <Input placeholder="xray-knife / xray-knife.exe" />
+            </Form.Item>
+            <Button
+              icon={<FolderOpenOutlined />}
+              onClick={async () => {
+                const res = await openDialog({ multiple: false, directory: false });
+                if (typeof res === "string") form.setFieldValue("defaultKnifePath", res);
               }}
             >
               选择

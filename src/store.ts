@@ -27,6 +27,8 @@ interface AppState {
   warning: string | null;
   result: TestResult | ApplyResult | null;
   resultKind: "test" | "apply" | null;
+  // 已测试订阅的节点缓存：sub id → 节点链接列表（应用生命周期内常驻）
+  knifeNodesCache: Record<number, string[]>;
   init: () => Promise<void>;
   selectProfile: (id: string) => Promise<void>;
   refresh: () => Promise<void>;
@@ -37,6 +39,7 @@ interface AppState {
   setTheme: (theme: ThemePref) => void;
   setResult: (kind: "test" | "apply", r: TestResult | ApplyResult) => void;
   clearResult: () => void;
+  setKnifeNodesCache: (cache: Record<number, string[]>) => void;
 }
 
 export const useAppStore = create<AppState>()((set, get) => ({
@@ -53,6 +56,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
   warning: null,
   result: null,
   resultKind: null,
+  knifeNodesCache: {},
 
   init: async () => {
     const [profiles, settings] = await Promise.all([api.listProfiles(), api.loadSettings()]);
@@ -129,4 +133,5 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   setResult: (kind, r) => set({ result: r, resultKind: kind }),
   clearResult: () => set({ result: null, resultKind: null }),
+  setKnifeNodesCache: (cache) => set({ knifeNodesCache: cache }),
 }));

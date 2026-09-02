@@ -15,8 +15,23 @@ export interface TemplateEntry {
 
 export interface Settings {
   defaultXrayPath?: string | null;
+  defaultKnifePath?: string | null;
   defaultMultiFileTemplate: TemplateEntry[];
   theme?: "light" | "dark" | "system" | null;
+}
+
+export interface KnifeSubscription {
+  id: number;
+  remark: string;
+  url: string;
+  enabled: boolean;
+  configs: number;
+}
+
+export interface KnifeParseResult {
+  ok: boolean;
+  error?: string | null;
+  outbound?: Record<string, unknown> | null;
 }
 
 export type TabKey = "inbounds" | "outbounds" | "rules" | "balancers" | "other";

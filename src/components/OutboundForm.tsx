@@ -1,15 +1,17 @@
 import { useState } from "react";
 import { Button, Modal, Space, Tag, Tooltip, Typography } from "antd";
-import { ImportOutlined } from "@ant-design/icons";
+import { ImportOutlined, CloudSyncOutlined } from "@ant-design/icons";
 import { formatOutbounds, outboundSummary, parseOutbounds } from "../outbounds";
 import type { OutboundObject } from "../outbounds";
 import OutboundEditModal from "./OutboundEditModal";
 import OutboundImportModal from "./OutboundImportModal";
 import SectionListForm from "./SectionListForm";
+import SubscriptionModal from "./SubscriptionModal";
 
 /** 出站列表表单（容器逻辑见 SectionListForm） */
 export default function OutboundForm() {
   const [importOpen, setImportOpen] = useState(false);
+  const [subOpen, setSubOpen] = useState(false);
 
   return (
     <>
@@ -22,16 +24,28 @@ export default function OutboundForm() {
         emptyText="暂无出站，点击右上角「新增」创建"
         deleteConfirmTitle="删除这个出站？"
         headerExtra={
-          <Tooltip title="从分享链接导入">
-            <Button
-              size="small"
-              type="text"
-              icon={<ImportOutlined />}
-              onClick={() => setImportOpen(true)}
-            >
-              导入
-            </Button>
-          </Tooltip>
+          <>
+            <Tooltip title="通过订阅导入节点">
+              <Button
+                size="small"
+                type="text"
+                icon={<CloudSyncOutlined />}
+                onClick={() => setSubOpen(true)}
+              >
+                订阅
+              </Button>
+            </Tooltip>
+            <Tooltip title="从分享链接导入">
+              <Button
+                size="small"
+                type="text"
+                icon={<ImportOutlined />}
+                onClick={() => setImportOpen(true)}
+              >
+                导入
+              </Button>
+            </Tooltip>
+          </>
         }
         renderItem={(b) => {
           const s = outboundSummary(b);
@@ -73,6 +87,7 @@ export default function OutboundForm() {
       >
         <OutboundImportModal onClose={() => setImportOpen(false)} />
       </Modal>
+      <SubscriptionModal open={subOpen} onClose={() => setSubOpen(false)} />
     </>
   );
 }

@@ -1,6 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   ApplyResult,
+  KnifeParseResult,
+  KnifeSubscription,
   Profile,
   ReadConfigResult,
   Settings,
@@ -21,6 +23,26 @@ export const api = {
   generateX25519: (profile: Profile, settings: Settings) =>
     invoke<X25519Result>("generate_x25519", { profile, settings }),
   readTextFile: (path: string) => invoke<string>("read_text_file", { path }),
+  knifeResolve: (settings: Settings) =>
+    invoke<string | null>("knife_resolve", { settings }),
+  knifeListSubscriptions: (settings: Settings) =>
+    invoke<KnifeSubscription[]>("knife_list_subscriptions", { settings }),
+  knifeTestSubscription: (settings: Settings, subId: number) =>
+    invoke<string[]>("knife_test_subscription", { settings, subId }),
+  knifeParseLink: (settings: Settings, link: string) =>
+    invoke<KnifeParseResult>("knife_parse_link", { settings, link }),
+  knifeAddSubscription: (settings: Settings, url: string, remark: string) =>
+    invoke<void>("knife_add_subscription", { settings, url, remark }),
+  knifeRemoveSubscription: (settings: Settings, id: number) =>
+    invoke<void>("knife_remove_subscription", { settings, id }),
+  knifeUpdateSubscription: (
+    settings: Settings,
+    id: number,
+    url?: string | null,
+    remark?: string | null,
+  ) => invoke<void>("knife_update_subscription", { settings, id, url, remark }),
+  knifeFetchSubscription: (settings: Settings, id: number) =>
+    invoke<void>("knife_fetch_subscription", { settings, id }),
   readConfig: (profile: Profile, settings: Settings) =>
     invoke<ReadConfigResult>("read_config", { profile, settings }),
   testConfig: (profile: Profile, settings: Settings, tabs: TabContents) =>

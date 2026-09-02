@@ -30,6 +30,8 @@ pub struct Settings {
     #[serde(default)]
     pub default_xray_path: Option<String>,
     #[serde(default)]
+    pub default_knife_path: Option<String>,
+    #[serde(default)]
     pub default_multi_file_template: Vec<TemplateEntry>,
     #[serde(default)]
     pub theme: Option<String>,
@@ -106,6 +108,32 @@ pub struct ApiStep {
 pub struct X25519Result {
     pub private_key: String,
     pub public_key: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KnifeSubscription {
+    pub id: i64,
+    pub remark: String,
+    #[serde(default)]
+    pub url: String,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default)]
+    pub configs: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KnifeParseResult {
+    pub ok: bool,
+    pub error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub outbound: Option<serde_json::Value>,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 pub fn default_template() -> Vec<TemplateEntry> {
