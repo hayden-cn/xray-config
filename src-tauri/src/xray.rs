@@ -7,7 +7,14 @@ use std::time::{Duration, Instant};
 
 use crate::models::{CommandOutput, TestResult, X25519Result};
 
-pub fn find_xray(profile_xray: Option<&str>, default_xray: Option<&str>) -> Result<PathBuf, String> {
+/// Windows 进程创建标志：不创建控制台窗口。
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+pub fn find_xray(
+    profile_xray: Option<&str>,
+    default_xray: Option<&str>,
+) -> Result<PathBuf, String> {
     if let Some(p) = profile_xray.map(str::trim).filter(|s| !s.is_empty()) {
         let pb = PathBuf::from(p);
         if pb.is_file() {
@@ -60,13 +67,17 @@ pub fn run_with_timeout(
     args: &[String],
     timeout: Duration,
 ) -> Result<CommandOutput, String> {
-    let child = Command::new(bin)
-        .args(args)
+    let mut cmd = Command::new(bin);
+    cmd.args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("启动 xray 失败: {}", e))?;
+        .stderr(Stdio::piped());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    let child = cmd.spawn().map_err(|e| format!("启动 xray 失败: {}", e))?;
     collect_output(child, timeout)
 }
 
@@ -147,6 +158,7 @@ fn shell_command(command: &str) -> Command {
     c.raw_arg("/S")
         .raw_arg("/C")
         .raw_arg(&format!("\"{}\"", command));
+    c.creation_flags(CREATE_NO_WINDOW);
     c
 }
 
@@ -162,7 +174,11 @@ pub fn generate_uuid(bin: &Path) -> Result<String, String> {
     let out = run_with_timeout(bin, &args, Duration::from_secs(10))?;
     if out.code != 0 {
         let detail = out.stderr.trim();
-        let detail = if detail.is_empty() { out.stdout.trim() } else { detail };
+        let detail = if detail.is_empty() {
+            out.stdout.trim()
+        } else {
+            detail
+        };
         return Err(format!("xray uuid 失败 (exit {}):\n{}", out.code, detail));
     }
     let uuid = out.stdout.trim().to_string();
@@ -177,7 +193,11 @@ pub fn generate_x25519(bin: &Path) -> Result<X25519Result, String> {
     let out = run_with_timeout(bin, &args, Duration::from_secs(10))?;
     if out.code != 0 {
         let detail = out.stderr.trim();
-        let detail = if detail.is_empty() { out.stdout.trim() } else { detail };
+        let detail = if detail.is_empty() {
+            out.stdout.trim()
+        } else {
+            detail
+        };
         return Err(format!("xray x25519 失败 (exit {}):\n{}", out.code, detail));
     }
     let stdout = out.stdout;
@@ -186,7 +206,10 @@ pub fn generate_x25519(bin: &Path) -> Result<X25519Result, String> {
     if private_key.is_empty() || public_key.is_empty() {
         return Err("xray x25519 输出格式无法解析".into());
     }
-    Ok(X25519Result { private_key, public_key })
+    Ok(X25519Result {
+        private_key,
+        public_key,
+    })
 }
 
 fn parse_key(stdout: &str, prefix: &str) -> String {
@@ -197,7 +220,8 @@ fn parse_key(stdout: &str, prefix: &str) -> String {
         .unwrap_or_default()
 }
 
-pub fn run_test(bin: &Path, confdir: &Path) -> Result<TestResult, String> {    let args = vec![
+pub fn run_test(bin: &Path, confdir: &Path) -> Result<TestResult, String> {
+    let args = vec![
         "run".into(),
         format!("-confdir={}", confdir.display()),
         "-test".into(),
@@ -227,7 +251,11 @@ pub fn dump_folder(bin: &Path, dir: &Path) -> Result<String, String> {
     let out = run_with_timeout(bin, &args, Duration::from_secs(20))?;
     if out.code != 0 {
         let detail = out.stderr.trim();
-        let detail = if detail.is_empty() { out.stdout.trim() } else { detail };
+        let detail = if detail.is_empty() {
+            out.stdout.trim()
+        } else {
+            detail
+        };
         return Err(format!("xray dump 失败 (exit {}):\n{}", out.code, detail));
     }
     if out.stdout.trim().is_empty() {
@@ -247,7 +275,12 @@ pub fn api_list(bin: &Path, server: &str, kind: &str) -> Result<CommandOutput, S
     run_with_timeout(bin, &args, Duration::from_secs(15))
 }
 
-pub fn api_add(bin: &Path, server: &str, kind: &str, config_file: &Path) -> Result<CommandOutput, String> {
+pub fn api_add(
+    bin: &Path,
+    server: &str,
+    kind: &str,
+    config_file: &Path,
+) -> Result<CommandOutput, String> {
     let args = vec![
         "api".into(),
         kind.into(),
@@ -259,7 +292,12 @@ pub fn api_add(bin: &Path, server: &str, kind: &str, config_file: &Path) -> Resu
     run_with_timeout(bin, &args, Duration::from_secs(60))
 }
 
-pub fn api_remove(bin: &Path, server: &str, kind: &str, tags: &[String]) -> Result<CommandOutput, String> {
+pub fn api_remove(
+    bin: &Path,
+    server: &str,
+    kind: &str,
+    tags: &[String],
+) -> Result<CommandOutput, String> {
     let mut args = vec![
         "api".into(),
         kind.into(),

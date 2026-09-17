@@ -46,15 +46,23 @@ fn resolve_xray(profile: Profile, settings: Settings) -> Result<Option<String>, 
 }
 
 #[tauri::command]
-fn generate_uuid(profile: Profile, settings: Settings) -> Result<String, String> {
-    let bin = xray::find_xray(profile.xray_path.as_deref(), settings.default_xray_path.as_deref())?;
-    xray::generate_uuid(&bin)
+async fn generate_uuid(profile: Profile, settings: Settings) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let bin = xray::find_xray(profile.xray_path.as_deref(), settings.default_xray_path.as_deref())?;
+        xray::generate_uuid(&bin)
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {}", e))?
 }
 
 #[tauri::command]
-fn generate_x25519(profile: Profile, settings: Settings) -> Result<X25519Result, String> {
-    let bin = xray::find_xray(profile.xray_path.as_deref(), settings.default_xray_path.as_deref())?;
-    xray::generate_x25519(&bin)
+async fn generate_x25519(profile: Profile, settings: Settings) -> Result<X25519Result, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let bin = xray::find_xray(profile.xray_path.as_deref(), settings.default_xray_path.as_deref())?;
+        xray::generate_x25519(&bin)
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {}", e))?
 }
 
 #[tauri::command]
@@ -71,67 +79,107 @@ fn knife_resolve(settings: Settings) -> Result<Option<String>, String> {
 }
 
 #[tauri::command]
-fn knife_list_subscriptions(settings: Settings) -> Result<Vec<KnifeSubscription>, String> {
-    let bin = knife::find_knife(settings.default_knife_path.as_deref())?;
-    knife::list_subscriptions(&bin)
+async fn knife_list_subscriptions(settings: Settings) -> Result<Vec<KnifeSubscription>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let bin = knife::find_knife(settings.default_knife_path.as_deref())?;
+        knife::list_subscriptions(&bin)
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {}", e))?
 }
 
 #[tauri::command]
-fn knife_test_subscription(settings: Settings, sub_id: i64) -> Result<Vec<String>, String> {
-    let bin = knife::find_knife(settings.default_knife_path.as_deref())?;
-    knife::test_subscription(&bin, sub_id)
+async fn knife_test_subscription(settings: Settings, sub_id: i64) -> Result<Vec<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let bin = knife::find_knife(settings.default_knife_path.as_deref())?;
+        knife::test_subscription(&bin, sub_id)
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {}", e))?
 }
 
 #[tauri::command]
-fn knife_parse_link(settings: Settings, link: String) -> Result<KnifeParseResult, String> {
-    let bin = knife::find_knife(settings.default_knife_path.as_deref())?;
-    knife::parse_link(&bin, &link)
+async fn knife_parse_link(settings: Settings, link: String) -> Result<KnifeParseResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let bin = knife::find_knife(settings.default_knife_path.as_deref())?;
+        knife::parse_link(&bin, &link)
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {}", e))?
 }
 
 #[tauri::command]
-fn knife_add_subscription(settings: Settings, url: String, remark: String) -> Result<(), String> {
-    let bin = knife::find_knife(settings.default_knife_path.as_deref())?;
-    knife::add_subscription(&bin, &url, &remark)
+async fn knife_add_subscription(settings: Settings, url: String, remark: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let bin = knife::find_knife(settings.default_knife_path.as_deref())?;
+        knife::add_subscription(&bin, &url, &remark)
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {}", e))?
 }
 
 #[tauri::command]
-fn knife_remove_subscription(settings: Settings, id: i64) -> Result<(), String> {
-    let bin = knife::find_knife(settings.default_knife_path.as_deref())?;
-    knife::remove_subscription(&bin, id)
+async fn knife_remove_subscription(settings: Settings, id: i64) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let bin = knife::find_knife(settings.default_knife_path.as_deref())?;
+        knife::remove_subscription(&bin, id)
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {}", e))?
 }
 
 #[tauri::command]
-fn knife_update_subscription(
+async fn knife_update_subscription(
     settings: Settings,
     id: i64,
     url: Option<String>,
     remark: Option<String>,
 ) -> Result<(), String> {
-    let bin = knife::find_knife(settings.default_knife_path.as_deref())?;
-    knife::update_subscription(&bin, id, url.as_deref(), remark.as_deref())
+    tauri::async_runtime::spawn_blocking(move || {
+        let bin = knife::find_knife(settings.default_knife_path.as_deref())?;
+        knife::update_subscription(&bin, id, url.as_deref(), remark.as_deref())
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {}", e))?
 }
 
 #[tauri::command]
-fn knife_fetch_subscription(settings: Settings, id: i64) -> Result<(), String> {
-    let bin = knife::find_knife(settings.default_knife_path.as_deref())?;
-    knife::fetch_subscription(&bin, id)
+async fn knife_fetch_subscription(settings: Settings, id: i64) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let bin = knife::find_knife(settings.default_knife_path.as_deref())?;
+        knife::fetch_subscription(&bin, id)
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {}", e))?
 }
 
 #[tauri::command]
-fn read_config(profile: Profile, settings: Settings) -> Result<ReadConfigResult, String> {
-    pipeline::read_config(&profile, settings.default_xray_path.as_deref())
+async fn read_config(profile: Profile, settings: Settings) -> Result<ReadConfigResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        pipeline::read_config(&profile, settings.default_xray_path.as_deref())
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {}", e))?
 }
 
 #[tauri::command]
-fn test_config(profile: Profile, settings: Settings, tabs: TabContents) -> Result<TestResult, String> {
+async fn test_config(profile: Profile, settings: Settings, tabs: TabContents) -> Result<TestResult, String> {
     let template = effective_template(&settings);
-    pipeline::test_config(&profile, settings.default_xray_path.as_deref(), &tabs, &template)
+    tauri::async_runtime::spawn_blocking(move || {
+        pipeline::test_config(&profile, settings.default_xray_path.as_deref(), &tabs, &template)
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {}", e))?
 }
 
 #[tauri::command]
-fn apply_config(profile: Profile, settings: Settings, tabs: TabContents) -> Result<ApplyResult, String> {
+async fn apply_config(profile: Profile, settings: Settings, tabs: TabContents) -> Result<ApplyResult, String> {
     let template = effective_template(&settings);
-    pipeline::apply_config(&profile, settings.default_xray_path.as_deref(), &tabs, &template)
+    tauri::async_runtime::spawn_blocking(move || {
+        pipeline::apply_config(&profile, settings.default_xray_path.as_deref(), &tabs, &template)
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {}", e))?
 }
 
 fn effective_template(settings: &Settings) -> Vec<models::TemplateEntry> {

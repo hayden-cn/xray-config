@@ -164,6 +164,7 @@ export default function SubscriptionModal({ open, onClose }: SubscriptionModalPr
       setView("nodes");
       return;
     }
+    if (testingId !== null) return;
     await runTest(sub, true);
   };
 
@@ -177,9 +178,9 @@ export default function SubscriptionModal({ open, onClose }: SubscriptionModalPr
   };
 
   const runTest = async (sub: KnifeSubscription, saveCache: boolean) => {
+    setTestingId(sub.id);
     try {
       await api.knifeFetchSubscription(settings, sub.id);
-      setTestingId(sub.id);
       const links = await api.knifeTestSubscription(settings, sub.id);
       setActiveSub({ ...sub });
       setNodes(links);
@@ -199,7 +200,7 @@ export default function SubscriptionModal({ open, onClose }: SubscriptionModalPr
 
   // 重新测试当前订阅：跳过缓存，更新节点
   const handleRetest = async () => {
-    if (!activeSub) return;
+    if (!activeSub || testingId !== null) return;
     invalidateCache(activeSub.id);
     await runTest(activeSub, true);
   };
