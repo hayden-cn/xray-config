@@ -23,6 +23,8 @@ export const api = {
   generateX25519: (profile: Profile, settings: Settings) =>
     invoke<X25519Result>("generate_x25519", { profile, settings }),
   readTextFile: (path: string) => invoke<string>("read_text_file", { path }),
+  isAdmin: () => invoke<boolean>("is_admin"),
+  restartAsAdmin: () => invoke<void>("restart_as_admin"),
   knifeResolve: (settings: Settings) =>
     invoke<string | null>("knife_resolve", { settings }),
   knifeListSubscriptions: (settings: Settings) =>

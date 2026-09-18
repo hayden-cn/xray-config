@@ -1,3 +1,4 @@
+pub mod admin;
 pub mod knife;
 pub mod models;
 pub mod pipeline;
@@ -68,6 +69,18 @@ async fn generate_x25519(profile: Profile, settings: Settings) -> Result<X25519R
 #[tauri::command]
 fn read_text_file(path: String) -> Result<String, String> {
     std::fs::read_to_string(&path).map_err(|e| format!("读取文件失败: {}", e))
+}
+
+#[tauri::command]
+fn is_admin() -> bool {
+    admin::is_elevated()
+}
+
+#[tauri::command]
+fn restart_as_admin(app: AppHandle) -> Result<(), String> {
+    admin::restart_as_admin()?;
+    app.exit(0);
+    Ok(())
 }
 
 #[tauri::command]
@@ -204,6 +217,8 @@ pub fn run() {
             generate_uuid,
             generate_x25519,
             read_text_file,
+            is_admin,
+            restart_as_admin,
             knife_resolve,
             knife_list_subscriptions,
             knife_test_subscription,

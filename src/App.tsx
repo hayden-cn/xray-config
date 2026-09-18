@@ -4,6 +4,7 @@ import {
   CheckCircleOutlined,
   PlayCircleOutlined,
   ReloadOutlined,
+  RocketOutlined,
   SaveOutlined,
 } from "@ant-design/icons";
 import { useAppStore } from "./store";
@@ -23,13 +24,25 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [resolvedXray, setResolvedXray] = useState<string | null>(null);
   const [resultOpen, setResultOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
 
   useEffect(() => {
     useAppStore.getState().init().catch((e) => {
       message.error(String(e));
     });
+    api.isAdmin().then(setIsAdmin).catch(() => setIsAdmin(true));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleRestartAsAdmin = () => {
+    modal.confirm({
+      title: "以管理员身份重新启动",
+      content: "将以管理员身份重新启动本程序，未保存的更改将丢失。是否继续？",
+      okText: "重新启动",
+      cancelText: "取消",
+      onOk: () => api.restartAsAdmin(),
+    });
+  };
 
   const currentProfile = useMemo(
     () => store.profiles.find((p) => p.id === store.currentProfileId) ?? null,
@@ -90,9 +103,16 @@ export default function App() {
   return (
     <Layout style={{ height: "100vh" }}>
       <Layout.Header className="app-header">
-        <Typography.Title level={4} style={{ color: "var(--header-text)", margin: 0 }}>
-          Xray 配置管理器
-        </Typography.Title>
+        <Space size={12} align="center">
+          <Typography.Title level={4} style={{ color: "var(--header-text)", margin: 0 }}>
+            Xray 配置管理器
+          </Typography.Title>
+          {isAdmin === false && (
+            <Button type="primary" icon={<RocketOutlined />} onClick={handleRestartAsAdmin}>
+              以管理员身份重新启动
+            </Button>
+          )}
+        </Space>
         <ProfileBar />
       </Layout.Header>
       <Layout.Content className="app-content">

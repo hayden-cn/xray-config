@@ -34,7 +34,8 @@ cargo test              # 后端测试（在 src-tauri/ 下执行）
 ### 后端（`src-tauri/src/`）
 - `lib.rs`：注册 11 个命令（全部经 `#[tauri::command]`）：
 
-  `list_profiles`、`save_profiles`、`load_settings`、`save_settings`、`resolve_xray`、`generate_uuid`、`generate_x25519`、`read_text_file`、`read_config`、`test_config`、`apply_config`
+  `list_profiles`、`save_profiles`、`load_settings`、`save_settings`、`resolve_xray`、`generate_uuid`、`generate_x25519`、`read_text_file`、`is_admin`、`restart_as_admin`、`read_config`、`test_config`、`apply_config`（另有 `knife_*` 系列命令）
+- `admin.rs`：Windows 管理员权限检测与提权重启。`is_elevated()` 经 `OpenProcessToken`+`GetTokenInformation(TokenElevation)` 判断；`restart_as_admin()` 用 `ShellExecuteW("runas", 当前 exe)` 提权启动新实例（返回 <=32 视为用户取消/失败），成功后 `lib.rs` 调 `app.exit(0)`。依赖 `[target.'cfg(windows)'.dependencies] windows-sys 0.61`（Foundation/Security/System_Threading/UI_Shell/UI_WindowsAndMessaging）。
 - `models.rs`：`Profile{id,name,path,api_address?,xray_path?}`、`Settings{default_xray_path?,default_multi_file_template,theme?}`、`TemplateEntry{file,keys}`、`TabContents{inbounds,outbounds,rules,balancers,other}`、`ReadConfigResult{mode,content,files,warning?}`、`TestResult{ok,code,message,stdout,stderr}`、`ApplyResult{ok,message,test?,written_files,api_update?}`、`ApiUpdateResult{ok,message,steps}`、`ApiStep{command,ok,message}`。
   - `default_template()`：15 条硬编码多文件模板（`00_log`…`99_version` + `98_other` 兜底 `*`）。**前端 `src/types.ts` 的 `DEFAULT_TEMPLATE` 必须与之保持同步**。
   - `settings.json` 中模板为空时 `effective_template()` 回退到 `default_template()`。
