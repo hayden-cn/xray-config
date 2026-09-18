@@ -5,7 +5,6 @@ import type { LayoutTab } from "../layout";
 import { sectionUri } from "../schema";
 import { useAppStore } from "../store";
 import BalancerForm from "./BalancerForm";
-import BurstObservatoryForm from "./BurstObservatoryForm";
 import InboundForm from "./InboundForm";
 import OutboundForm from "./OutboundForm";
 import LogForm from "./LogForm";
@@ -61,29 +60,29 @@ export default function ConfigTabs() {
         />
       )
     ) : (
-      <ScrollArea className="tab-scroll-area" style={{ flex: 1, minHeight: 0 }}>
-        <Space direction="vertical" size={10} style={{ width: "100%", paddingBottom: 8 }}>
-          {tab.children.map((c) =>
-            c.key === "log" ? (
-              <LogForm key={c.key} label={c.label} />
-            ) : c.key === "routing" ? (
-              <RoutingForm key={c.key} label={c.label} />
-            ) : c.key === "observatory" ? (
-              <ObservatoryForm key={c.key} label={c.label} />
-            ) : c.key === "burstObservatory" ? (
-              <BurstObservatoryForm key={c.key} label={c.label} />
-            ) : (
-              <SectionCard
-                key={c.key}
-                path={c.key}
-                label={c.label}
-                value={store.sections[c.key]}
-                onChange={(v) => store.setSection(c.key, v)}
-              />
-            ),
-          )}
-        </Space>
-      </ScrollArea>
+      tab.key === "observatory" ? (
+        <ObservatoryForm label={tab.label} />
+      ) : (
+        <ScrollArea className="tab-scroll-area" style={{ flex: 1, minHeight: 0 }}>
+          <Space direction="vertical" size={10} style={{ width: "100%", paddingBottom: 8 }}>
+            {tab.children.map((c) =>
+              c.key === "log" ? (
+                <LogForm key={c.key} label={c.label} />
+              ) : c.key === "routing" ? (
+                <RoutingForm key={c.key} label={c.label} />
+              ) : (
+                <SectionCard
+                  key={c.key}
+                  path={c.key}
+                  label={c.label}
+                  value={store.sections[c.key]}
+                  onChange={(v) => store.setSection(c.key, v)}
+                />
+              ),
+            )}
+          </Space>
+        </ScrollArea>
+      )
     );
     return { key: tab.key, label: <TabLabel tab={tab} dirty={dirty} />, children };
   });

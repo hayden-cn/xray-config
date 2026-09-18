@@ -182,6 +182,12 @@ body {
   padding: 0 16px 12px;
 }
 
+.observatory-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .json-editor {
   border: 1px solid var(--border-color);
   border-radius: 4px;
