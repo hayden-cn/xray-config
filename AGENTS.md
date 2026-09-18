@@ -47,7 +47,7 @@ cargo test              # 后端测试（在 src-tauri/ 下执行）
 ### 前端（`src/`）
 
 - `layout.ts`：**页签/子 section 结构的唯一定义点**（单点修改）。`layouts` 数组硬编码：inbounds/outbounds/rules→routing.rules/balancers→routing.balancers/other；other 的 children 顺序 = log/routing/api/dns/fakedns/policy/stats/metrics/observatory/burstObservatory/geodata/env/version/reverse/transport。child.key 即 xray 配置点号路径；`descendantSections(path)` 供 `json.ts` 把已独立拆出的子 section 从父级剥离（routing → routing.rules/routing.balancers）。
-  - **新增/调整页签只需改 `layout.ts`（+`schema.ts` 注册 schema），后端零改动**（`json.ts` 按 `allChildPaths` 自动遍历）。已有表单 UI 的 section：`inbounds`/`outbounds`/`routing.rules`/`routing.balancers`（SectionListForm）、`log`/`routing`（LogForm/RoutingForm）、`observatory`/`burstObservatory`（ObservatoryForm，head 内 Segmented 二选一合并成一张卡片）；其余走 SectionCard/SectionEditor。
+  - **新增/调整页签只需改 `layout.ts`（+`schema.ts` 注册 schema），后端零改动**（`json.ts` 按 `allChildPaths` 自动遍历）。已有表单 UI 的 section：`inbounds`/`outbounds`/`routing.rules`/`routing.balancers`（SectionListForm）、`log`/`routing`（LogForm/RoutingForm）、`observatory`/`burstObservatory`（ObservatoryForm，head 内 Segmented 二选一合并成一张卡片；**互斥**：切换/编辑会清空另一 section，burst 的 `pingConfig` 为必填项、即便全空也保留 `"pingConfig": {}`；`subjectSelector` 为两节共有字段，切换时若当前已设置则同步到目标；加载/刷新后重置手动选择、按已有配置默认选中，`observatory` 优先）；其余走 SectionCard/SectionEditor。
 - `json.ts`：`parseJsonc` / `splitSections` / `buildFull` / `sectionsToTabs`（前后端边界适配层）。`stripDescendants` 将已独立拆出的子 section 从父级剔除（routing 只留 domainStrategy/domainMatcher 等，rules/balancers 归独立 section）；空数组/空对象→空串→从配置省略。
 - `rules.ts` / `balancers.ts` / `inbounds.ts`：数组类 section 的域类型与工具。`parseList<T>`/`formatList`（rules.ts 导出泛型，空数组→空串）、`extractTags(text)`（解析数组 section 收集对象元素的 tag，做下拉建议）、`ruleSummary`/`balancerSummary`/`inboundSummary`（卡片摘要）。
 - `schema.ts`：`sectionUri(path)=file:///xray/<path>.json`；`ARRAY_DEFS`（inbounds/outbounds/`routing.rules`→RuleObject/`routing.balancers`→BalancerObject）+ `SINGLE_DEFS`（含 `routing`→RoutingObject）映射 xray-schema.json definitions；transport 不注册 schema。**捆绑 schema 的 RoutingObject 缺 `domainMatcher`**，但真实 xray 支持（additionalProperties 默认 true，Monaco 与 `-test` 均接受）。
@@ -110,7 +110,7 @@ cargo test              # 后端测试（在 src-tauri/ 下执行）
 
 ## Xray 后端事实（实测于 26.3.27）
 
-- `xray run -confdir=<dir> -dump`：输出**配置文件形式** JSON（4 空格缩进，**无 `_TypedMessage_`**），可用于读取/重建配置。
+- `xray run -confdir=<dir> -dump`：输出**配置文件形式** JSON（4 空格缩进，**无 `_TypedMessage_`**），可用于读取/重建配置。注意：dump 把 `burstObservatory` 的空 `pingConfig` 展开为各字段 0；`strip_dump_defaults` 零值剔除时**保留空对象**（不剔除 `{}`），否则必填的 `"pingConfig": {}` 丢失会导致 `-test` 报错。
 - `xray run -confdir=<dir> -test`：exit 0 = 配置合法；**exit 23 = 配置错误**。stdout/stderr 必须分开捕获（`run_with_timeout` 防死锁）。
 - confdir 会加载 `*.json|*.jsonc|*.toml|*.yaml|*.yml`，按文件名排序（数字前缀决定加载顺序）。**必须保证临时 confdir 至少有 1 个文件**，否则 xray 会回退到 cwd 的 config.json。
 - API 热更新：`xray api lsi/lso/adi/ado/rmi/rmo/adrules --server=<addr>`；`lsi/lso` 默认 server 为 `127.0.0.1:8080`；失败时 exit 1（`base.Fatalf`）。

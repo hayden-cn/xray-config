@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Button,
   Form,
@@ -75,6 +75,12 @@ export default function ObservatoryForm({ label = "观测" }: ObservatoryFormPro
   const rawBurst = useAppStore((s) => s.sections.burstObservatory);
   const outbounds = useAppStore((s) => s.sections.outbounds);
   const setSection = useAppStore((s) => s.setSection);
+  const savedSections = useAppStore((s) => s.savedSections);
+
+  // 初次读取/刷新/应用后重置手动选择，按当前已有配置重新默认选中
+  useEffect(() => {
+    setManualKind(null);
+  }, [savedSections]);
 
   const kind = manualKind ?? inferKind(rawObservatory, rawBurst);
   const raw = kind === "observatory" ? rawObservatory : rawBurst;
@@ -82,15 +88,26 @@ export default function ObservatoryForm({ label = "观测" }: ObservatoryFormPro
   const outboundTags = extractTags(outbounds).map((value) => ({ value }));
   const pingConfig = isObject(parsed.pingConfig) ? parsed.pingConfig : {};
 
+  const otherKind = kind === "observatory" ? "burstObservatory" : "observatory";
+
   const write = (patch: Record<string, unknown>) => {
     const merged = { ...parsed, ...patch };
-    const dropKeys =
-      kind === "observatory" ? ["subjectSelector", "probeUrl", "probeInterval"] : ["subjectSelector", "pingConfig"];
-    for (const key of dropKeys) {
-      if (isEmpty(merged[key])) delete merged[key];
+    if (kind === "observatory") {
+      for (const key of ["subjectSelector", "probeUrl", "probeInterval"]) {
+        if (isEmpty(merged[key])) delete merged[key];
+      }
+      if (merged.enableConcurrency === false) delete merged.enableConcurrency;
+      setSection("observatory", Object.keys(merged).length === 0 ? "" : JSON.stringify(merged, null, 2));
+    } else {
+      for (const key of ["subjectSelector"]) {
+        if (isEmpty(merged[key])) delete merged[key];
+      }
+      // burstObservatory 的 pingConfig 为必填项，至少保留空对象
+      merged.pingConfig = isObject(merged.pingConfig) ? merged.pingConfig : {};
+      setSection("burstObservatory", JSON.stringify(merged, null, 2));
     }
-    if (kind === "observatory" && merged.enableConcurrency === false) delete merged.enableConcurrency;
-    setSection(kind, Object.keys(merged).length === 0 ? "" : JSON.stringify(merged, null, 2));
+    // 常规/突发观测互斥，只保留当前选中的一种
+    if (useAppStore.getState().sections[otherKind]) setSection(otherKind, "");
   };
 
   const writePingConfig = (patch: Record<string, unknown>) => {
@@ -99,6 +116,26 @@ export default function ObservatoryForm({ label = "观测" }: ObservatoryFormPro
       if (isEmpty(next[key])) delete next[key];
     }
     write({ pingConfig: next });
+  };
+
+  const selectKind = (next: ObservatoryKind) => {
+    if (next === kind) return;
+    const from = kind;
+    const { sections } = useAppStore.getState();
+    // subjectSelector 为两种观测共有字段，切换时若当前已设置则同步到目标
+    const selector = strArray(parseObject(sections[from]).subjectSelector);
+    setManualKind(next);
+    const p = parseObject(sections[next]);
+    if (selector.length > 0) p.subjectSelector = selector;
+    if (next === "burstObservatory" && !isObject(p.pingConfig)) p.pingConfig = {};
+    setSection(next, Object.keys(p).length === 0 ? "" : JSON.stringify(p, null, 2));
+    setSection(from, "");
+  };
+
+  const writeJson = (v: string) => {
+    setSection(kind, v);
+    // JSON 模式下同样保证互斥，只保留当前选中的一种
+    if (useAppStore.getState().sections[otherKind]) setSection(otherKind, "");
   };
 
   return (
@@ -110,7 +147,7 @@ export default function ObservatoryForm({ label = "观测" }: ObservatoryFormPro
             size="small"
             value={kind}
             options={KIND_OPTIONS}
-            onChange={(v) => setManualKind(v as ObservatoryKind)}
+            onChange={(v) => selectKind(v as ObservatoryKind)}
           />
           <Button
             size="small"
@@ -123,7 +160,7 @@ export default function ObservatoryForm({ label = "观测" }: ObservatoryFormPro
       </div>
       {mode === "json" ? (
         <div className="section-card-editor">
-          <SectionEditor path={kind} value={raw} onChange={(v) => setSection(kind, v)} />
+          <SectionEditor path={kind} value={raw} onChange={writeJson} />
         </div>
       ) : (
         <div className="observatory-form">

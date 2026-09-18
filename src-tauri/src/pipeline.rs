@@ -177,8 +177,8 @@ pub fn split_by_template(
 }
 
 fn serialize_section(name: &str, value: &Value) -> Result<String, String> {
-    let json = serde_json::to_string_pretty(value)
-        .map_err(|e| format!("序列化 {} 失败: {}", name, e))?;
+    let json =
+        serde_json::to_string_pretty(value).map_err(|e| format!("序列化 {} 失败: {}", name, e))?;
     if name.to_lowercase().ends_with(".jsonc") {
         Ok(format!("// 拆分文件：{}\n{}\n", name, json))
     } else {
@@ -195,8 +195,7 @@ fn write_temp_files(files: &[(String, Value)]) -> Result<TempDir, String> {
     }
     for (name, value) in files {
         let text = serialize_section(name, value)?;
-        fs::write(dir.path().join(name), text)
-            .map_err(|e| format!("写入 {} 失败: {}", name, e))?;
+        fs::write(dir.path().join(name), text).map_err(|e| format!("写入 {} 失败: {}", name, e))?;
     }
     Ok(dir)
 }
@@ -233,7 +232,8 @@ fn strip_dump_defaults(v: &mut Value) {
                         Value::Number(n) => n.as_i64() == Some(0) || n.as_u64() == Some(0),
                         Value::String(s) => s.is_empty(),
                         Value::Array(items) => items.is_empty(),
-                        Value::Object(items) => items.is_empty(),
+                        // 空对象不能剔除：可能是必要字段（如 burstObservatory.pingConfig）
+                        Value::Object(_) => false,
                         _ => false,
                     };
                     removable.then(|| key.clone())
@@ -292,6 +292,22 @@ mod tests {
         assert!(!normalized.contains("\"maxConcurrency\""));
         assert!(normalized.contains("\"path\""));
         assert!(normalized.contains("\"udp\""));
+    }
+
+    #[test]
+    fn normalize_dump_keeps_required_empty_ping_config() {
+        let normalized = normalize_dump(
+            r#"{
+                "burstObservatory": {
+                    "pingConfig": { "interval": 0, "sampling": 0, "timeout": 0 },
+                    "subjectSelector": ["proxy"]
+                }
+            }"#,
+        )
+        .unwrap();
+
+        assert!(normalized.contains("\"pingConfig\": {}"));
+        assert!(normalized.contains("\"subjectSelector\""));
     }
 }
 
@@ -374,44 +390,49 @@ fn verify_api(profile: &Profile, bin: &Path, content: &str) -> Option<String> {
     let local_out = extract_tags(parsed.get("outbounds"));
     let mut warnings: Vec<String> = Vec::new();
 
-    let mut check = |kind: &str, key: &str, local: &[String]| {
-        match xray::api_list(bin, addr, kind) {
-            Ok(out) => {
-                if out.code == 0 {
-                    let live = parse_list_tags(&out.stdout, key);
-                    let missing: Vec<String> =
-                        local.iter().filter(|t| !live.contains(t)).cloned().collect();
-                    let extra: Vec<String> =
-                        live.iter().filter(|t| !local.contains(t)).cloned().collect();
-                    if !missing.is_empty() {
-                        warnings.push(format!(
-                            "运行实例缺少配置中的{}: {}",
-                            if kind == "lsi" { "入站" } else { "出站" },
-                            missing.join(", ")
-                        ));
-                    }
-                    if !extra.is_empty() {
-                        warnings.push(format!(
-                            "运行实例存在配置之外的{}: {}",
-                            if kind == "lsi" { "入站" } else { "出站" },
-                            extra.join(", ")
-                        ));
-                    }
-                } else {
+    let mut check = |kind: &str, key: &str, local: &[String]| match xray::api_list(bin, addr, kind)
+    {
+        Ok(out) => {
+            if out.code == 0 {
+                let live = parse_list_tags(&out.stdout, key);
+                let missing: Vec<String> = local
+                    .iter()
+                    .filter(|t| !live.contains(t))
+                    .cloned()
+                    .collect();
+                let extra: Vec<String> = live
+                    .iter()
+                    .filter(|t| !local.contains(t))
+                    .cloned()
+                    .collect();
+                if !missing.is_empty() {
                     warnings.push(format!(
-                        "无法获取运行实例{}列表 (exit {}): {}",
+                        "运行实例缺少配置中的{}: {}",
                         if kind == "lsi" { "入站" } else { "出站" },
-                        out.code,
-                        out.stderr.trim()
+                        missing.join(", ")
                     ));
                 }
+                if !extra.is_empty() {
+                    warnings.push(format!(
+                        "运行实例存在配置之外的{}: {}",
+                        if kind == "lsi" { "入站" } else { "出站" },
+                        extra.join(", ")
+                    ));
+                }
+            } else {
+                warnings.push(format!(
+                    "无法获取运行实例{}列表 (exit {}): {}",
+                    if kind == "lsi" { "入站" } else { "出站" },
+                    out.code,
+                    out.stderr.trim()
+                ));
             }
-            Err(e) => warnings.push(format!(
-                "无法获取运行实例{}列表: {}",
-                if kind == "lsi" { "入站" } else { "出站" },
-                e
-            )),
         }
+        Err(e) => warnings.push(format!(
+            "无法获取运行实例{}列表: {}",
+            if kind == "lsi" { "入站" } else { "出站" },
+            e
+        )),
     };
     check("lsi", "inbounds", &local_in);
     check("lso", "outbounds", &local_out);
@@ -423,7 +444,10 @@ fn verify_api(profile: &Profile, bin: &Path, content: &str) -> Option<String> {
     }
 }
 
-pub fn read_config(profile: &Profile, default_xray: Option<&str>) -> Result<ReadConfigResult, String> {
+pub fn read_config(
+    profile: &Profile,
+    default_xray: Option<&str>,
+) -> Result<ReadConfigResult, String> {
     let mut r = read_plain(profile, default_xray)?;
     if profile
         .api_address
@@ -502,7 +526,11 @@ fn write_api_config(entries: &[(&str, Value)]) -> Result<TempDir, String> {
 
 fn api_err_msg(out: &CommandOutput) -> String {
     let detail = out.stderr.trim();
-    let detail = if detail.is_empty() { out.stdout.trim() } else { detail };
+    let detail = if detail.is_empty() {
+        out.stdout.trim()
+    } else {
+        detail
+    };
     if detail.is_empty() {
         format!("退出码 {}", out.code)
     } else {
@@ -510,7 +538,12 @@ fn api_err_msg(out: &CommandOutput) -> String {
     }
 }
 
-fn run_api_update(bin: &Path, addr: &str, old: &Value, new: &Value) -> Result<ApiUpdateResult, String> {
+fn run_api_update(
+    bin: &Path,
+    addr: &str,
+    old: &Value,
+    new: &Value,
+) -> Result<ApiUpdateResult, String> {
     let mut steps: Vec<ApiStep> = Vec::new();
     let mut ok_all = true;
 
@@ -524,7 +557,11 @@ fn run_api_update(bin: &Path, addr: &str, old: &Value, new: &Value) -> Result<Ap
         steps.push(ApiStep {
             command: format!("rmo {}", rem_out.join(", ")),
             ok,
-            message: if ok { "移除成功".into() } else { api_err_msg(&out) },
+            message: if ok {
+                "移除成功".into()
+            } else {
+                api_err_msg(&out)
+            },
         });
     }
     if !rem_in.is_empty() {
@@ -534,7 +571,11 @@ fn run_api_update(bin: &Path, addr: &str, old: &Value, new: &Value) -> Result<Ap
         steps.push(ApiStep {
             command: format!("rmi {}", rem_in.join(", ")),
             ok,
-            message: if ok { "移除成功".into() } else { api_err_msg(&out) },
+            message: if ok {
+                "移除成功".into()
+            } else {
+                api_err_msg(&out)
+            },
         });
     }
     if !add_out.is_empty() {
@@ -545,7 +586,11 @@ fn run_api_update(bin: &Path, addr: &str, old: &Value, new: &Value) -> Result<Ap
         steps.push(ApiStep {
             command: format!("ado 新增/更新出站"),
             ok,
-            message: if ok { "更新成功".into() } else { api_err_msg(&out) },
+            message: if ok {
+                "更新成功".into()
+            } else {
+                api_err_msg(&out)
+            },
         });
     }
     if !add_in.is_empty() {
@@ -556,7 +601,11 @@ fn run_api_update(bin: &Path, addr: &str, old: &Value, new: &Value) -> Result<Ap
         steps.push(ApiStep {
             command: format!("adi 新增/更新入站"),
             ok,
-            message: if ok { "更新成功".into() } else { api_err_msg(&out) },
+            message: if ok {
+                "更新成功".into()
+            } else {
+                api_err_msg(&out)
+            },
         });
     }
 
@@ -576,7 +625,11 @@ fn run_api_update(bin: &Path, addr: &str, old: &Value, new: &Value) -> Result<Ap
         steps.push(ApiStep {
             command: "adrules 更新路由规则".into(),
             ok,
-            message: if ok { "更新成功".into() } else { api_err_msg(&out) },
+            message: if ok {
+                "更新成功".into()
+            } else {
+                api_err_msg(&out)
+            },
         });
     }
 
@@ -648,27 +701,37 @@ pub fn apply_config(
             if p.is_file() {
                 if let Some(ext) = p.extension().map(|e| e.to_string_lossy().to_lowercase()) {
                     if ext == "json" || ext == "jsonc" {
-                        fs::remove_file(&p).map_err(|e| format!("删除 {} 失败: {}", p.display(), e))?;
+                        fs::remove_file(&p)
+                            .map_err(|e| format!("删除 {} 失败: {}", p.display(), e))?;
                     }
                 }
             }
         }
         for (name, value) in &files {
             let text = serialize_section(name, value)?;
-            fs::write(path.join(name), text)
-                .map_err(|e| format!("写入 {} 失败: {}", name, e))?;
+            fs::write(path.join(name), text).map_err(|e| format!("写入 {} 失败: {}", name, e))?;
             written_files.push(name.clone());
         }
     } else {
-        let json = serde_json::to_string_pretty(&obj)
-            .map_err(|e| format!("序列化配置失败: {}", e))?;
+        let json =
+            serde_json::to_string_pretty(&obj).map_err(|e| format!("序列化配置失败: {}", e))?;
         fs::write(path, format!("{}\n", json)).map_err(|e| format!("写入文件失败: {}", e))?;
         written_files.push(profile.path.clone());
     }
 
     let api_update = if has_api {
-        let addr = profile.api_address.as_deref().unwrap_or_default().trim().to_string();
-        Some(run_api_update(&bin, &addr, &old_obj.unwrap_or_default(), &obj)?)
+        let addr = profile
+            .api_address
+            .as_deref()
+            .unwrap_or_default()
+            .trim()
+            .to_string();
+        Some(run_api_update(
+            &bin,
+            &addr,
+            &old_obj.unwrap_or_default(),
+            &obj,
+        )?)
     } else {
         None
     };
@@ -684,10 +747,18 @@ pub fn apply_config(
         .map(str::trim)
         .filter(|s| !s.is_empty())
     {
-        let cwd = if meta.is_dir() { Some(path) } else { path.parent() };
+        let cwd = if meta.is_dir() {
+            Some(path)
+        } else {
+            path.parent()
+        };
         post_command = Some(match xray::run_shell(cmd, cwd, Duration::from_secs(60)) {
             Ok(out) => out,
-            Err(e) => CommandOutput { code: -1, stdout: String::new(), stderr: e },
+            Err(e) => CommandOutput {
+                code: -1,
+                stdout: String::new(),
+                stderr: e,
+            },
         });
         if post_command.as_ref().map(|o| o.code).unwrap_or(-1) != 0 {
             message.push_str("；应用后命令执行失败");
