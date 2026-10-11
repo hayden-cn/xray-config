@@ -1,4 +1,4 @@
-import { App, Button, Modal, Space, Tag } from "antd";
+import { App, Button, Modal, Tag } from "antd";
 import {
   DeleteOutlined,
   EditOutlined,
@@ -70,11 +70,13 @@ export default function ProfileManagerModal({
             renderRow={(p, _i, props) => (
               <>
                 <div className="profile-sort-meta">
-                  <Space size={8} wrap>
-                    <span>{p.name}</span>
+                  <div className="profile-title-line">
+                    <span className="profile-title-name" title={p.name}>
+                      {p.name}
+                    </span>
                     {p.id === currentProfileId && <Tag color="blue">当前</Tag>}
                     {p.apiAddress && <Tag color="green">API</Tag>}
-                  </Space>
+                  </div>
                   <div className="profile-path" title={p.path}>
                     {truncateMiddle(p.path, 56)}
                   </div>
