@@ -29,25 +29,23 @@ export default function ProfileBar() {
   };
 
   return (
-    <Space style={{ display: "flex", justifyContent: "flex-end" }} wrap>
+    <Space style={{ display: "flex", justifyContent: "flex-end", flexWrap: "nowrap" }}>
       <Select
         size="middle"
-        style={{ minWidth: 220, maxWidth: 380 }}
+        style={{ width: "clamp(200px, 24vw, 380px)" }}
         placeholder="选择 Profile"
         value={currentProfileId ?? undefined}
-        options={profiles.map((p) => ({
-          value: p.id,
-          label: (
-            <span className="profile-option">
-              <span className="profile-option-name">{p.name}</span>
-              {p.path && (
-                <span className="profile-option-path" title={p.path}>
-                  {truncateMiddle(p.path, 44)}
-                </span>
-              )}
-            </span>
-          ),
-        }))}
+        options={profiles.map((p) => ({ value: p.id, label: p.name, path: p.path }))}
+        optionRender={(option) => (
+          <span className="profile-option">
+            <span className="profile-option-name">{option.data.label}</span>
+            {option.data.path && (
+              <span className="profile-option-path" title={option.data.path}>
+                {truncateMiddle(String(option.data.path), 44)}
+              </span>
+            )}
+          </span>
+        )}
         onChange={(id) => {
           const store = useAppStore.getState();
           if (store.dirtySections.length > 0 && current?.id !== id) {

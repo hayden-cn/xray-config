@@ -103,8 +103,8 @@ export default function App() {
   return (
     <Layout style={{ height: "100vh" }}>
       <Layout.Header className="app-header">
-        <Space size={12} align="center">
-          <Typography.Title level={4} style={{ color: "var(--header-text)", margin: 0 }}>
+        <Space size={12} align="center" style={{ flex: "none" }}>
+          <Typography.Title level={4} style={{ color: "var(--header-text)", margin: 0, whiteSpace: "nowrap" }}>
             Xray 配置管理器
           </Typography.Title>
           {isAdmin === false && (
