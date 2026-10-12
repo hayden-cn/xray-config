@@ -71,6 +71,13 @@ export default function SubscriptionModal({ open, onClose }: SubscriptionModalPr
     void init();
   }, [open]);
 
+  // 编辑弹窗为 destroyOnHidden，打开后 Form 才挂载，此时才能回填字段
+  useEffect(() => {
+    if (editOpen && editTarget) {
+      editForm.setFieldsValue({ url: editTarget.url, remark: editTarget.remark });
+    }
+  }, [editOpen, editTarget, editForm]);
+
   const init = async () => {
     try {
       const p = await api.knifeResolve(settings);
@@ -128,12 +135,6 @@ export default function SubscriptionModal({ open, onClose }: SubscriptionModalPr
     } catch (e) {
       message.error(String(e));
     }
-  };
-
-  const handleEdit = () => {
-    if (!editTarget) return;
-    setEditOpen(true);
-    editForm.setFieldsValue({ url: editTarget.url, remark: editTarget.remark });
   };
 
   const handleEditSave = async () => {
@@ -328,7 +329,7 @@ export default function SubscriptionModal({ open, onClose }: SubscriptionModalPr
                         icon={<EditOutlined />}
                         onClick={() => {
                           setEditTarget(s);
-                          handleEdit();
+                          setEditOpen(true);
                         }}
                       >
                         编辑
