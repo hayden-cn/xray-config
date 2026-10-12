@@ -35,12 +35,34 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build and publish Tauri release
-        uses: tauri-apps/tauri-action@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build app
+        run: pnpm tauri build
+
+      - name: Package portable zip
+        shell: pwsh
+        run: |
+          $version = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          $exe = "src-tauri/target/release/xray-config.exe"
+          if (-not (Test-Path $exe)) { throw "未找到裸 exe：$exe" }
+          New-Item -ItemType Directory -Force -Path dist-portable | Out-Null
+          $zip = "dist-portable/xray-config_${version}_x64-portable.zip"
+          Compress-Archive -Path $exe -DestinationPath $zip -Force
+          Get-ChildItem $zip | Select-Object Name, Length
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "${{ github.ref_name }}"
-          releaseDraft: false
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          files: dist-portable/*.zip
+          body: "Windows 便携版：解压后直接运行 xray-config.exe，需系统已安装 WebView2 运行时。"
+          draft: false
           prerelease: false
+
+      - name: Upload workflow artifact
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: xray-config-portable
+          path: dist-portable/*.zip
