@@ -1,6 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   ApplyResult,
+  KnifeConfig,
+  KnifeHttpResult,
   KnifeParseResult,
   KnifeSubscription,
   Profile,
@@ -31,8 +33,14 @@ export const api = {
     invoke<KnifeSubscription[]>("knife_list_subscriptions", { settings }),
   knifeTestSubscription: (settings: Settings, subId: number) =>
     invoke<string[]>("knife_test_subscription", { settings, subId }),
+  knifeListConfigs: (settings: Settings) =>
+    invoke<KnifeConfig[]>("knife_list_configs", { settings }),
+  knifeTestAll: (settings: Settings) =>
+    invoke<KnifeHttpResult[]>("knife_test_all", { settings }),
   knifeParseLink: (settings: Settings, link: string) =>
     invoke<KnifeParseResult>("knife_parse_link", { settings, link }),
+  knifeParseLinks: (settings: Settings, links: string[]) =>
+    invoke<KnifeParseResult[]>("knife_parse_links", { settings, links }),
   knifeAddSubscription: (settings: Settings, url: string, remark: string) =>
     invoke<void>("knife_add_subscription", { settings, url, remark }),
   knifeRemoveSubscription: (settings: Settings, id: number) =>

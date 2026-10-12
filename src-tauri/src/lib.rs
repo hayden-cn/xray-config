@@ -6,8 +6,8 @@ pub mod storage;
 pub mod xray;
 
 use models::{
-    ApplyResult, KnifeParseResult, KnifeSubscription, Profile, ReadConfigResult, Settings,
-    TabContents, TestResult, X25519Result,
+    ApplyResult, KnifeConfig, KnifeHttpResult, KnifeParseResult, KnifeSubscription, Profile,
+    ReadConfigResult, Settings, TabContents, TestResult, X25519Result,
 };
 use tauri::AppHandle;
 
@@ -112,10 +112,40 @@ async fn knife_test_subscription(settings: Settings, sub_id: i64) -> Result<Vec<
 }
 
 #[tauri::command]
+async fn knife_list_configs(settings: Settings) -> Result<Vec<KnifeConfig>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let bin = knife::find_knife(settings.default_knife_path.as_deref())?;
+        knife::list_configs(&bin)
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {}", e))?
+}
+
+#[tauri::command]
+async fn knife_test_all(settings: Settings) -> Result<Vec<KnifeHttpResult>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let bin = knife::find_knife(settings.default_knife_path.as_deref())?;
+        knife::test_all(&bin)
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {}", e))?
+}
+
+#[tauri::command]
 async fn knife_parse_link(settings: Settings, link: String) -> Result<KnifeParseResult, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let bin = knife::find_knife(settings.default_knife_path.as_deref())?;
         knife::parse_link(&bin, &link)
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {}", e))?
+}
+
+#[tauri::command]
+async fn knife_parse_links(settings: Settings, links: Vec<String>) -> Result<Vec<KnifeParseResult>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let bin = knife::find_knife(settings.default_knife_path.as_deref())?;
+        Ok(knife::parse_links(&bin, &links))
     })
     .await
     .map_err(|e| format!("任务执行失败: {}", e))?
@@ -222,7 +252,10 @@ pub fn run() {
             knife_resolve,
             knife_list_subscriptions,
             knife_test_subscription,
+            knife_list_configs,
+            knife_test_all,
             knife_parse_link,
+            knife_parse_links,
             knife_add_subscription,
             knife_remove_subscription,
             knife_update_subscription,

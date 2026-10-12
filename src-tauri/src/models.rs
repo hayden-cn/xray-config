@@ -132,6 +132,31 @@ pub struct KnifeParseResult {
     pub outbound: Option<serde_json::Value>,
 }
 
+/// `subs list-configs --json` 的单条节点记录（v11 起提供）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KnifeConfig {
+    pub id: i64,
+    #[serde(default)]
+    pub subscription_id: Option<i64>,
+    pub link: String,
+    #[serde(default)]
+    pub protocol: String,
+    #[serde(default)]
+    pub remark: String,
+}
+
+/// `http -x json` 输出单条测速结果（status: passed/failed/semi-passed，delay 毫秒、失败为 -1）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KnifeHttpResult {
+    pub link: String,
+    #[serde(default)]
+    pub status: String,
+    #[serde(default)]
+    pub delay: i64,
+}
+
 fn default_true() -> bool {
     true
 }

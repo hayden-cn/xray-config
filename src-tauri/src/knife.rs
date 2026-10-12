@@ -1,7 +1,9 @@
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Mutex;
 use std::time::Duration;
 
-use crate::models::{KnifeParseResult, KnifeSubscription};
+use crate::models::{KnifeConfig, KnifeHttpResult, KnifeParseResult, KnifeSubscription};
 use crate::xray::run_with_timeout;
 
 pub fn find_knife(default_knife: Option<&str>) -> Result<PathBuf, String> {
@@ -99,21 +101,76 @@ fn parse_subs_table(stdout: &str) -> Result<Vec<KnifeSubscription>, String> {
     Ok(subs)
 }
 
+/// 列出全库去重后的节点（跨订阅聚合，`subs list-configs --json`，需 v11+）
+pub fn list_configs(bin: &Path) -> Result<Vec<KnifeConfig>, String> {
+    let args = vec![
+        "subs".into(),
+        "list-configs".into(),
+        "--json".into(),
+        "--limit".into(),
+        "0".into(),
+    ];
+    let out = run_with_timeout(bin, &args, Duration::from_secs(30))?;
+    if out.code != 0 {
+        let detail = out.stderr.trim();
+        let detail = if detail.is_empty() { out.stdout.trim() } else { detail };
+        return Err(format!(
+            "xray-knife subs list-configs 失败 (exit {})，需要 xray-knife v11 及以上：\n{}",
+            out.code, detail
+        ));
+    }
+    serde_json::from_str::<Vec<KnifeConfig>>(&out.stdout)
+        .map_err(|e| format!("解析 subs list-configs --json 输出失败: {}", e))
+}
+
 pub fn test_subscription(bin: &Path, sub_id: i64) -> Result<Vec<String>, String> {
+    run_http_test(
+        bin,
+        &["--sub-id".into(), sub_id.to_string()],
+        Duration::from_secs(600),
+    )
+}
+
+/// 全库测速（不带 --sub-id，库内按链接全局去重，需 v11+）。
+/// 用 `-x json` 拿全量结果（含 status/delay）；部分/全部失败时 CLI 会非零退出，
+/// 但只要结果文件有效仍视为成功。
+pub fn test_all(bin: &Path) -> Result<Vec<KnifeHttpResult>, String> {
     let dir = tempfile::tempdir().map_err(|e| format!("创建临时目录失败: {}", e))?;
-    let out_path = dir.path().join("valid_links.txt");
+    let out_path = dir.path().join("results.json");
 
     let args = vec![
         "http".into(),
         "--from-db".into(),
-        "--sub-id".into(),
-        sub_id.to_string(),
+        "--limit".into(),
+        "0".into(),
         "-x".into(),
-        "txt".into(),
+        "json".into(),
         "-o".into(),
         out_path.to_string_lossy().into_owned(),
     ];
-    let out = run_with_timeout(bin, &args, Duration::from_secs(600))?;
+    let out = run_with_timeout(bin, &args, Duration::from_secs(1800))?;
+
+    if let Ok(content) = std::fs::read_to_string(&out_path) {
+        if let Ok(results) = serde_json::from_str::<Vec<KnifeHttpResult>>(&content) {
+            return Ok(results);
+        }
+    }
+    if out.code != 0 {
+        let detail = out.stderr.trim();
+        let detail = if detail.is_empty() { out.stdout.trim() } else { detail };
+        return Err(format!("xray-knife http 测试失败 (exit {}):\n{}", out.code, detail));
+    }
+    Ok(Vec::new())
+}
+
+fn run_http_test(bin: &Path, extra_args: &[String], timeout: Duration) -> Result<Vec<String>, String> {
+    let dir = tempfile::tempdir().map_err(|e| format!("创建临时目录失败: {}", e))?;
+    let out_path = dir.path().join("valid_links.txt");
+
+    let mut args = vec!["http".into(), "--from-db".into()];
+    args.extend_from_slice(extra_args);
+    args.extend_from_slice(&["-x".into(), "txt".into(), "-o".into(), out_path.to_string_lossy().into_owned()]);
+    let out = run_with_timeout(bin, &args, timeout)?;
     if out.code != 0 {
         let detail = out.stderr.trim();
         let detail = if detail.is_empty() { out.stdout.trim() } else { detail };
@@ -157,6 +214,42 @@ pub fn parse_link(bin: &Path, link: &str) -> Result<KnifeParseResult, String> {
     }
 }
 
+/// 批量解析链接：`parse --json` 限制单链接，故以至多 8 个 worker 线程并发起进程，
+/// 结果按输入顺序返回（前端单次 invoke 完成整批导入解析）。
+pub fn parse_links(bin: &Path, links: &[String]) -> Vec<KnifeParseResult> {
+    const WORKERS: usize = 8;
+    let n = links.len();
+    let next = AtomicUsize::new(0);
+    let slots: Mutex<Vec<Option<KnifeParseResult>>> =
+        Mutex::new((0..n).map(|_| None).collect());
+    std::thread::scope(|s| {
+        for _ in 0..WORKERS.min(n) {
+            let next = &next;
+            let slots = &slots;
+            let links = links;
+            let bin = bin.to_path_buf();
+            s.spawn(move || loop {
+                let i = next.fetch_add(1, Ordering::Relaxed);
+                if i >= n {
+                    break;
+                }
+                let r = parse_link(&bin, &links[i])
+                    .unwrap_or_else(|e| KnifeParseResult { ok: false, error: Some(e), outbound: None });
+                slots.lock().unwrap()[i] = Some(r);
+            });
+        }
+    });
+    let owned = slots.into_inner().unwrap_or_else(|e| e.into_inner());
+    owned
+        .into_iter()
+        .map(|o| o.unwrap_or_else(|| KnifeParseResult {
+            ok: false,
+            error: Some("批量解析未产出结果".into()),
+            outbound: None,
+        }))
+        .collect()
+}
+
 pub fn add_subscription(bin: &Path, url: &str, remark: &str) -> Result<(), String> {
     let mut args = vec!["subs".into(), "add".into(), "--url".into(), url.to_string()];
     if !remark.trim().is_empty() {
@@ -195,7 +288,16 @@ pub fn update_subscription(
 }
 
 pub fn fetch_subscription(bin: &Path, id: i64) -> Result<(), String> {
-    let args = vec!["subs".into(), "fetch".into(), "--id".into(), id.to_string()];
+    // v11 起 fetch 默认会把节点写到进程当前目录的 configs.txt，
+    // 若应用从项目目录启动会污染工作树并触发 dev 热重启，故显式禁用。
+    let args = vec![
+        "subs".into(),
+        "fetch".into(),
+        "--id".into(),
+        id.to_string(),
+        "--out".into(),
+        String::new(),
+    ];
     run_ok(bin, &args)
 }
 

@@ -28,6 +28,22 @@ export interface KnifeSubscription {
   configs: number;
 }
 
+// subs list-configs --json 的单条节点（v11+），subscriptionId 为最近来源、仅展示用
+export interface KnifeConfig {
+  id: number;
+  subscriptionId: number | null;
+  link: string;
+  protocol: string;
+  remark: string;
+}
+
+// http -x json 的单条测速结果，delay 单位毫秒、失败为 -1
+export interface KnifeHttpResult {
+  link: string;
+  status: string;
+  delay: number;
+}
+
 export interface KnifeParseResult {
   ok: boolean;
   error?: string | null;

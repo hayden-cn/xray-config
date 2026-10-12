@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   App,
   Button,
@@ -14,6 +14,7 @@ import {
   Typography,
 } from "antd";
 import {
+  AppstoreOutlined,
   ArrowLeftOutlined,
   DeleteOutlined,
   EditOutlined,
@@ -25,7 +26,7 @@ import {
 import { useAppStore } from "../store";
 import { api } from "../api";
 import { parseOutbounds, formatOutbounds } from "../outbounds";
-import type { KnifeSubscription } from "../types";
+import type { KnifeConfig, KnifeHttpResult, KnifeSubscription } from "../types";
 import type { OutboundObject } from "../outbounds";
 import ScrollArea from "./ScrollArea";
 
@@ -34,7 +35,7 @@ interface SubscriptionModalProps {
   onClose: () => void;
 }
 
-type SubView = "list" | "nodes";
+type SubView = "list" | "nodes" | "all";
 
 export default function SubscriptionModal({ open, onClose }: SubscriptionModalProps) {
   const { message } = App.useApp();
@@ -55,6 +56,13 @@ export default function SubscriptionModal({ open, onClose }: SubscriptionModalPr
   const [checked, setChecked] = useState<string[]>([]);
   const [replaceProxy, setReplaceProxy] = useState(true);
 
+  // 聚合视图状态（全部订阅去重节点，来自 subs list-configs）
+  const [allConfigs, setAllConfigs] = useState<KnifeConfig[]>([]);
+  const [allResults, setAllResults] = useState<KnifeHttpResult[] | null>(null);
+  const [delaySort, setDelaySort] = useState<"ascend" | "descend" | null>(null);
+  const [allLoading, setAllLoading] = useState(false);
+  const [testingAll, setTestingAll] = useState(false);
+
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<KnifeSubscription | null>(null);
@@ -69,6 +77,9 @@ export default function SubscriptionModal({ open, onClose }: SubscriptionModalPr
     setChecked([]);
     setReplaceProxy(true);
     setActiveSub(null);
+    setAllConfigs([]);
+    setAllResults(null);
+    setDelaySort(null);
     void init();
   }, [open]);
 
@@ -211,6 +222,88 @@ export default function SubscriptionModal({ open, onClose }: SubscriptionModalPr
     await runTest(activeSub, true);
   };
 
+  // 聚合视图：即时列出全库去重节点（不测速、不写缓存）
+  const openAllConfigs = async () => {
+    setChecked([]);
+    setAllResults(null);
+    setDelaySort(null);
+    setView("all");
+    setAllLoading(true);
+    try {
+      setAllConfigs(await api.knifeListConfigs(settings));
+    } catch (e) {
+      message.error(String(e));
+      setView("list");
+    } finally {
+      setAllLoading(false);
+    }
+  };
+
+  // 全量测速：单个 http --from-db 进程测全库，完成后显示状态/延迟并默认按延迟升序
+  const handleTestAll = async () => {
+    if (testingAll) return;
+    setTestingAll(true);
+    try {
+      const results = await api.knifeTestAll(settings);
+      setAllResults(results);
+      setDelaySort("ascend");
+      const passed = new Set(results.filter((r) => r.status === "passed").map((r) => r.link));
+      setChecked((prev) => prev.filter((l) => passed.has(l)));
+      message.success(`测试通过 ${passed.size} / ${results.length} 个节点`);
+    } catch (e) {
+      message.error(String(e));
+    } finally {
+      setTestingAll(false);
+    }
+  };
+
+  const resultMap = useMemo(() => {
+    const m = new Map<string, KnifeHttpResult>();
+    for (const r of allResults ?? []) m.set(r.link, r);
+    return m;
+  }, [allResults]);
+
+  // 排序时失败节点恒排最后；未测速保持库内顺序
+  const sortedConfigs = useMemo(() => {
+    if (!allResults || delaySort === null) return allConfigs;
+    const rank = (c: KnifeConfig) => {
+      const r = resultMap.get(c.link);
+      return r && r.status === "passed" ? r.delay : Number.POSITIVE_INFINITY;
+    };
+    return [...allConfigs].sort((a, b) => {
+      const ra = rank(a);
+      const rb = rank(b);
+      const aBad = ra === Number.POSITIVE_INFINITY;
+      const bBad = rb === Number.POSITIVE_INFINITY;
+      if (aBad || bBad) {
+        if (aBad && bBad) return 0;
+        return aBad ? 1 : -1;
+      }
+      const d = ra - rb;
+      return delaySort === "ascend" ? d : -d;
+    });
+  }, [allConfigs, allResults, delaySort, resultMap]);
+
+  const passedCount = useMemo(
+    () => (allResults ? allResults.filter((r) => r.status === "passed").length : 0),
+    [allResults],
+  );
+
+  // 选至此：替换为第 1 行到当前行范围内所有通过节点（未测速则范围内全选）
+  const selectUpTo = (index: number) => {
+    const range = sortedConfigs.slice(0, index + 1);
+    const links = range
+      .filter((c) => !allResults || resultMap.get(c.link)?.status === "passed")
+      .map((c) => c.link);
+    setChecked(links);
+  };
+
+  const subLabel = (id: number | null) => {
+    if (id === null) return "一次性链接";
+    const s = subs.find((x) => x.id === id);
+    return s ? s.remark || s.url : `订阅 #${id}`;
+  };
+
   const handleImport = async () => {
     const selected = checked;
     if (selected.length === 0) return;
@@ -224,8 +317,8 @@ export default function SubscriptionModal({ open, onClose }: SubscriptionModalPr
       const existingTags = new Set(existing.map((o) => o.tag).filter((t): t is string => !!t));
       const imported: OutboundObject[] = [];
       let failed = 0;
-      for (const link of selected) {
-        const r = await api.knifeParseLink(settings, link);
+      const results = await api.knifeParseLinks(settings, selected);
+      for (const r of results) {
         if (!r.ok || !r.outbound) {
           failed++;
           continue;
@@ -282,6 +375,9 @@ export default function SubscriptionModal({ open, onClose }: SubscriptionModalPr
             </Button>
             <Button size="small" type="text" icon={<ReloadOutlined />} onClick={loadSubs}>
               刷新
+            </Button>
+            <Button size="small" type="text" icon={<AppstoreOutlined />} onClick={openAllConfigs}>
+              全部节点
             </Button>
           </Space>
           <ScrollArea maxHeight="60vh">
@@ -360,6 +456,123 @@ export default function SubscriptionModal({ open, onClose }: SubscriptionModalPr
               ))}
             </Space>
           </ScrollArea>
+        </Spin>
+      ) : view === "all" ? (
+        <Spin spinning={allLoading}>
+          <Space style={{ marginBottom: 8 }} wrap>
+            <Button
+              size="small"
+              type="text"
+              icon={<ArrowLeftOutlined />}
+              onClick={() => setView("list")}
+            >
+              返回订阅列表
+            </Button>
+            <Typography.Text strong>全部订阅</Typography.Text>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              {allResults === null
+                ? `共 ${allConfigs.length} 个节点（跨订阅去重）`
+                : `测试通过 ${passedCount} / ${allConfigs.length} 个节点`}
+            </Typography.Text>
+            <Button
+              size="small"
+              icon={<ThunderboltOutlined />}
+              loading={testingAll}
+              onClick={handleTestAll}
+            >
+              全量测速
+            </Button>
+            <Checkbox checked={replaceProxy} onChange={(e) => setReplaceProxy(e.target.checked)}>
+              替换现有 proxy
+            </Checkbox>
+            <Button
+              size="small"
+              type="primary"
+              icon={<ExportOutlined />}
+              disabled={checked.length === 0}
+              loading={importing}
+              onClick={handleImport}
+            >
+              解析导入 {checked.length} 个到出站
+            </Button>
+          </Space>
+          <Table<KnifeConfig>
+            virtual
+            rowKey={(c) => c.link}
+            dataSource={sortedConfigs}
+            pagination={false}
+            size="small"
+            scroll={{ y: Math.round(window.innerHeight * 0.5), x: 940 }}
+            style={{ width: "100%" }}
+            locale={{ emptyText: "库中暂无节点，请先对各订阅点击更新" }}
+            rowSelection={{
+              selectedRowKeys: checked,
+              onChange: (keys) => setChecked(keys.map(String)),
+            }}
+            onChange={(_p, _f, sorter) => {
+              const s = Array.isArray(sorter) ? sorter[0] : sorter;
+              setDelaySort(s.order ?? null);
+            }}
+            columns={[
+              {
+                title: "协议",
+                width: 80,
+                render: (_: unknown, c) => <Tag>{c.protocol || "?"}</Tag>,
+              },
+              {
+                title: "延迟",
+                width: 110,
+                sorter: true,
+                sortOrder: allResults ? delaySort : undefined,
+                render: (_: unknown, c) => {
+                  const r = resultMap.get(c.link);
+                  if (!r) return allResults ? <Typography.Text type="danger">失败</Typography.Text> : "-";
+                  return r.status === "passed" ? (
+                    <Typography.Text style={{ fontSize: 12 }}>{r.delay} ms</Typography.Text>
+                  ) : (
+                    <Typography.Text type="danger">失败</Typography.Text>
+                  );
+                },
+              },
+              {
+                title: "备注",
+                width: 160,
+                render: (_: unknown, c) => (
+                  <Typography.Text ellipsis style={{ fontSize: 12 }}>
+                    {c.remark || "-"}
+                  </Typography.Text>
+                ),
+              },
+              {
+                title: "来源订阅",
+                width: 140,
+                render: (_: unknown, c) => (
+                  <Typography.Text ellipsis type="secondary" style={{ fontSize: 12 }}>
+                    {subLabel(c.subscriptionId)}
+                  </Typography.Text>
+                ),
+              },
+              {
+                title: "节点链接",
+                width: 300,
+                render: (_: unknown, c) => (
+                  <Typography.Text ellipsis style={{ fontSize: 12, fontFamily: "monospace" }}>
+                    {c.link}
+                  </Typography.Text>
+                ),
+              },
+              {
+                title: "操作",
+                width: 88,
+                fixed: "right",
+                render: (_: unknown, _c: KnifeConfig, index: number) => (
+                  <Button size="small" type="link" onClick={() => selectUpTo(index)}>
+                    选至此
+                  </Button>
+                ),
+              },
+            ]}
+          />
         </Spin>
       ) : (
         <>
