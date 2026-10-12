@@ -437,15 +437,25 @@ export default function SubscriptionModal({ open, onClose }: SubscriptionModalPr
                   }}
                 >
                   <Space direction="vertical" size={4} style={{ width: "100%" }}>
-                    <Space size={6} style={{ width: "100%" }}>
-                      <Typography.Text strong style={{ fontSize: 13 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <Typography.Text
+                        strong
+                        style={{
+                          fontSize: 13,
+                          flex: "0 1 auto",
+                          minWidth: 0,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
                         {s.remark || "(无备注)"}
                       </Typography.Text>
-                      <Tag color={s.enabled ? "green" : "default"}>
+                      <Tag color={s.enabled ? "green" : "default"} style={{ flexShrink: 0, marginInlineEnd: 0 }}>
                         {s.enabled ? "启用" : "停用"}
                       </Tag>
-                      <Tag>{s.configs} 节点</Tag>
-                    </Space>
+                      <Tag style={{ flexShrink: 0, marginInlineEnd: 0 }}>{s.configs} 节点</Tag>
+                    </div>
                     <Typography.Text
                       type="secondary"
                       ellipsis
@@ -498,47 +508,63 @@ export default function SubscriptionModal({ open, onClose }: SubscriptionModalPr
         </Spin>
       ) : (
         <Spin spinning={listLoading}>
-          <Space style={{ marginBottom: 8 }} wrap>
-            <Button
-              size="small"
-              type="text"
-              icon={<ArrowLeftOutlined />}
-              onClick={() => setView("list")}
-            >
-              返回订阅列表
-            </Button>
-            <Typography.Text strong>
-              {nodeScope ? nodeScope.sub.remark || nodeScope.sub.url : "全部订阅"}
-            </Typography.Text>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              {results === null
-                ? nodeScope
-                  ? `共 ${configs.length} 个节点`
-                  : `共 ${configs.length} 个节点（跨订阅去重）`
-                : `测试通过 ${passedCount} / ${configs.length} 个节点`}
-            </Typography.Text>
-            <Button
-              size="small"
-              icon={<ThunderboltOutlined />}
-              loading={testing}
-              onClick={handleTestSpeed}
-            >
-              {nodeScope ? "测速" : "全量测速"}
-            </Button>
-            <Checkbox checked={replaceProxy} onChange={(e) => setReplaceProxy(e.target.checked)}>
-              替换现有 proxy
-            </Checkbox>
-            <Button
-              size="small"
-              type="primary"
-              icon={<ExportOutlined />}
-              disabled={checked.length === 0}
-              loading={importing}
-              onClick={handleImport}
-            >
-              解析导入 {checked.length} 个到出站
-            </Button>
-          </Space>
+          <div style={{ marginBottom: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Button
+                size="small"
+                type="text"
+                icon={<ArrowLeftOutlined />}
+                onClick={() => setView("list")}
+                style={{ flexShrink: 0 }}
+              >
+                返回订阅列表
+              </Button>
+              <Typography.Text
+                strong
+                style={{
+                  flex: "0 1 auto",
+                  minWidth: 0,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {nodeScope ? nodeScope.sub.remark || nodeScope.sub.url : "全部订阅"}
+              </Typography.Text>
+              <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0, whiteSpace: "nowrap" }}>
+                {results === null
+                  ? nodeScope
+                    ? `共 ${configs.length} 个节点`
+                    : `共 ${configs.length} 个节点（跨订阅去重）`
+                  : `测试通过 ${passedCount} / ${configs.length} 个节点`}
+              </Typography.Text>
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6 }}>
+              <Space size={8} wrap>
+                <Button
+                  size="small"
+                  icon={<ThunderboltOutlined />}
+                  loading={testing}
+                  onClick={handleTestSpeed}
+                >
+                  测速
+                </Button>
+                <Checkbox checked={replaceProxy} onChange={(e) => setReplaceProxy(e.target.checked)}>
+                  替换现有 proxy
+                </Checkbox>
+                <Button
+                  size="small"
+                  type="primary"
+                  icon={<ExportOutlined />}
+                  disabled={checked.length === 0}
+                  loading={importing}
+                  onClick={handleImport}
+                >
+                  解析导入 {checked.length} 个到出站
+                </Button>
+              </Space>
+            </div>
+          </div>
           <Table<KnifeConfig>
             virtual
             rowKey={(c) => c.link}
