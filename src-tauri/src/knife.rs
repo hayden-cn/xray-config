@@ -57,6 +57,8 @@ pub fn list_subscriptions(bin: &Path) -> Result<Vec<KnifeSubscription>, String> 
     parse_subs_table(&out.stdout)
 }
 
+/// 解析 `subs show --verbose` 表格。列序：ID REMARK URL ENABLED CONFIGS LAST FETCHED。
+/// 备注可能含空格、时间列含空格，故从右向左以 true/false 锚定 ENABLED 列再切分。
 fn parse_subs_table(stdout: &str) -> Result<Vec<KnifeSubscription>, String> {
     let mut subs = Vec::new();
     for line in stdout.lines() {
@@ -70,19 +72,27 @@ fn parse_subs_table(stdout: &str) -> Result<Vec<KnifeSubscription>, String> {
         }
         let Ok(id) = parts[0].parse::<i64>() else { continue };
 
-        let enabled_idx = parts.iter().position(|p| *p == "true" || *p == "false");
-        let Some(ien) = enabled_idx else { continue };
-
-        let remark = parts[1..ien].join(" ");
-
+        // ENABLED 是唯一的 true/false 单元格，取最右一个以防备注/URL 中恰好出现该词
+        let Some(ien) = parts.iter().rposition(|p| *p == "true" || *p == "false") else {
+            continue;
+        };
         let enabled = parts[ien] == "true";
-
+        let configs_idx = ien + 1;
         let configs = parts
-            .get(ien + 1)
+            .get(configs_idx)
             .and_then(|s| s.parse::<i64>().ok())
             .unwrap_or(0);
 
-        let url = parts[ien + 2..].join(" ");
+        // ENABLED 之前右起第一个含 "://" 的 token 为 URL 列起点
+        // （备注为空时 REMARK 列也显示 URL，须从右取而非从左，否则会把备注当成 URL）
+        let url_start = parts[1..ien].iter().rposition(|p| p.contains("://"));
+        let (remark, url) = match url_start {
+            Some(pos) => {
+                let i = pos + 1;
+                (parts[1..i].join(" "), parts[i..ien].join(" "))
+            }
+            None => (parts[1..ien].join(" "), String::new()),
+        };
 
         subs.push(KnifeSubscription { id, remark, url, enabled, configs });
     }
@@ -197,4 +207,35 @@ fn run_ok(bin: &Path, args: &[String]) -> Result<(), String> {
         return Err(format!("xray-knife 命令失败 (exit {}):\n{}", out.code, detail));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_subs_table;
+
+    #[test]
+    fn parses_verbose_table_with_spaces_in_remark_and_time() {
+        let stdout = "\
+✅ 14:05:15 Successfully added subscription: https://test.example.com/sub?a=1
+ID   REMARK        URL                              ENABLED   CONFIGS   LAST FETCHED
+--   ------        ---                              -------   -------   ------------
+1    N/A           https://a.example.com/sub.txt    true      350       2026-10-12 05:50
+5    my remark 备注 test  https://b.example.com/sub  false     0         Never
+8    https://c.example.com/sub  https://c.example.com/sub  true  12      2026-10-12 05:53
+";
+        let subs = parse_subs_table(stdout).unwrap();
+        assert_eq!(subs.len(), 3);
+        assert_eq!(subs[0].remark, "N/A");
+        assert_eq!(subs[0].url, "https://a.example.com/sub.txt");
+        assert!(subs[0].enabled);
+        assert_eq!(subs[0].configs, 350);
+        assert_eq!(subs[1].remark, "my remark 备注 test");
+        assert_eq!(subs[1].url, "https://b.example.com/sub");
+        assert!(!subs[1].enabled);
+        assert_eq!(subs[1].configs, 0);
+        // 备注为空时 REMARK 列回显 URL，两者都应保留
+        assert_eq!(subs[2].remark, "https://c.example.com/sub");
+        assert_eq!(subs[2].url, "https://c.example.com/sub");
+        assert_eq!(subs[2].configs, 12);
+    }
 }
