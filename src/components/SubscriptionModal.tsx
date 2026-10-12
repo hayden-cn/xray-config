@@ -46,6 +46,7 @@ export default function SubscriptionModal({ open, onClose }: SubscriptionModalPr
   const [subs, setSubs] = useState<KnifeSubscription[]>([]);
   const [loading, setLoading] = useState(false);
   const [testingId, setTestingId] = useState<number | null>(null);
+  const [fetchingId, setFetchingId] = useState<number | null>(null);
   const [importing, setImporting] = useState(false);
 
   // 节点视图状态
@@ -127,6 +128,8 @@ export default function SubscriptionModal({ open, onClose }: SubscriptionModalPr
   };
 
   const handleFetch = async (id: number) => {
+    if (fetchingId !== null) return;
+    setFetchingId(id);
     try {
       await api.knifeFetchSubscription(settings, id);
       message.success("已更新订阅");
@@ -134,6 +137,8 @@ export default function SubscriptionModal({ open, onClose }: SubscriptionModalPr
       await loadSubs();
     } catch (e) {
       message.error(String(e));
+    } finally {
+      setFetchingId(null);
     }
   };
 
@@ -321,7 +326,12 @@ export default function SubscriptionModal({ open, onClose }: SubscriptionModalPr
                       >
                         查看节点
                       </Button>
-                      <Button size="small" icon={<ReloadOutlined />} onClick={() => handleFetch(s.id)}>
+                      <Button
+                        size="small"
+                        icon={<ReloadOutlined />}
+                        loading={fetchingId === s.id}
+                        onClick={() => handleFetch(s.id)}
+                      >
                         更新
                       </Button>
                       <Button
