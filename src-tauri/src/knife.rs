@@ -241,7 +241,7 @@ pub fn add_subscription(bin: &Path, url: &str, remark: &str) -> Result<(), Strin
         args.push("--remark".into());
         args.push(remark.trim().to_string());
     }
-    run_ok(bin, &args)
+    run_ok(bin, &args, Duration::from_secs(60))
 }
 
 pub fn remove_subscription(bin: &Path, id: i64) -> Result<(), String> {
@@ -251,7 +251,7 @@ pub fn remove_subscription(bin: &Path, id: i64) -> Result<(), String> {
         id.to_string(),
         "--yes".into(),
     ];
-    run_ok(bin, &args)
+    run_ok(bin, &args, Duration::from_secs(60))
 }
 
 pub fn update_subscription(
@@ -269,7 +269,7 @@ pub fn update_subscription(
         args.push("--remark".into());
         args.push(r.to_string());
     }
-    run_ok(bin, &args)
+    run_ok(bin, &args, Duration::from_secs(60))
 }
 
 pub fn fetch_subscription(bin: &Path, id: i64) -> Result<(), String> {
@@ -283,11 +283,23 @@ pub fn fetch_subscription(bin: &Path, id: i64) -> Result<(), String> {
         "--out".into(),
         String::new(),
     ];
-    run_ok(bin, &args)
+    run_ok(bin, &args, Duration::from_secs(60))
 }
 
-fn run_ok(bin: &Path, args: &[String]) -> Result<(), String> {
-    let out = run_with_timeout(bin, args, Duration::from_secs(60))?;
+/// 批量更新全部启用订阅（`subs fetch --all`，knife 内部 3 worker 并发，需 v11+）
+pub fn fetch_all(bin: &Path) -> Result<(), String> {
+    let args = vec![
+        "subs".into(),
+        "fetch".into(),
+        "--all".into(),
+        "--out".into(),
+        String::new(),
+    ];
+    run_ok(bin, &args, Duration::from_secs(300))
+}
+
+fn run_ok(bin: &Path, args: &[String], timeout: Duration) -> Result<(), String> {
+    let out = run_with_timeout(bin, args, timeout)?;
     if out.code != 0 {
         let detail = out.stderr.trim();
         let detail = if detail.is_empty() { out.stdout.trim() } else { detail };

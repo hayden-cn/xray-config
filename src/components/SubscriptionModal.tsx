@@ -50,6 +50,7 @@ export default function SubscriptionModal({ open, onClose }: SubscriptionModalPr
   const [subs, setSubs] = useState<KnifeSubscription[]>([]);
   const [loading, setLoading] = useState(false);
   const [fetchingId, setFetchingId] = useState<number | null>(null);
+  const [fetchingAll, setFetchingAll] = useState(false);
   const [importing, setImporting] = useState(false);
 
   // 节点视图状态（单订阅与全部订阅共用同一套表格/测速/导入逻辑）
@@ -146,6 +147,21 @@ export default function SubscriptionModal({ open, onClose }: SubscriptionModalPr
       message.error(String(e));
     } finally {
       setFetchingId(null);
+    }
+  };
+
+  // 全部更新：subs fetch --all（knife 内部并发，仅启用订阅）
+  const handleFetchAll = async () => {
+    if (fetchingId !== null || fetchingAll) return;
+    setFetchingAll(true);
+    try {
+      await api.knifeFetchAllSubscriptions(settings);
+      message.success("已更新全部订阅");
+      await loadSubs();
+    } catch (e) {
+      message.error(String(e));
+    } finally {
+      setFetchingAll(false);
     }
   };
 
@@ -389,6 +405,16 @@ export default function SubscriptionModal({ open, onClose }: SubscriptionModalPr
             </Button>
             <Button size="small" type="text" icon={<ReloadOutlined />} onClick={loadSubs}>
               刷新
+            </Button>
+            <Button
+              size="small"
+              type="text"
+              icon={<ReloadOutlined />}
+              loading={fetchingAll}
+              disabled={fetchingId !== null}
+              onClick={handleFetchAll}
+            >
+              全部更新
             </Button>
             <Button size="small" type="text" icon={<AppstoreOutlined />} onClick={() => openNodes(null)}>
               全部节点

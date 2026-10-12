@@ -200,6 +200,16 @@ async fn knife_fetch_subscription(settings: Settings, id: i64) -> Result<(), Str
 }
 
 #[tauri::command]
+async fn knife_fetch_all_subscriptions(settings: Settings) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let bin = knife::find_knife(settings.default_knife_path.as_deref())?;
+        knife::fetch_all(&bin)
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {}", e))?
+}
+
+#[tauri::command]
 async fn read_config(profile: Profile, settings: Settings) -> Result<ReadConfigResult, String> {
     tauri::async_runtime::spawn_blocking(move || {
         pipeline::read_config(&profile, settings.default_xray_path.as_deref())
@@ -263,6 +273,7 @@ pub fn run() {
             knife_remove_subscription,
             knife_update_subscription,
             knife_fetch_subscription,
+            knife_fetch_all_subscriptions,
             read_config,
             test_config,
             apply_config

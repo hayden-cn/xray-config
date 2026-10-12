@@ -53,6 +53,8 @@ export const api = {
   ) => invoke<void>("knife_update_subscription", { settings, id, url, remark }),
   knifeFetchSubscription: (settings: Settings, id: number) =>
     invoke<void>("knife_fetch_subscription", { settings, id }),
+  knifeFetchAllSubscriptions: (settings: Settings) =>
+    invoke<void>("knife_fetch_all_subscriptions", { settings }),
   readConfig: (profile: Profile, settings: Settings) =>
     invoke<ReadConfigResult>("read_config", { profile, settings }),
   testConfig: (profile: Profile, settings: Settings, tabs: TabContents) =>
