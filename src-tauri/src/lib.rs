@@ -102,20 +102,23 @@ async fn knife_list_subscriptions(settings: Settings) -> Result<Vec<KnifeSubscri
 }
 
 #[tauri::command]
-async fn knife_test_subscription(settings: Settings, sub_id: i64) -> Result<Vec<String>, String> {
+async fn knife_test_subscription(settings: Settings, sub_id: i64) -> Result<Vec<KnifeHttpResult>, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let bin = knife::find_knife(settings.default_knife_path.as_deref())?;
-        knife::test_subscription(&bin, sub_id)
+        knife::test_speed(&bin, Some(sub_id))
     })
     .await
     .map_err(|e| format!("任务执行失败: {}", e))?
 }
 
 #[tauri::command]
-async fn knife_list_configs(settings: Settings) -> Result<Vec<KnifeConfig>, String> {
+async fn knife_list_configs(
+    settings: Settings,
+    sub_id: Option<i64>,
+) -> Result<Vec<KnifeConfig>, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let bin = knife::find_knife(settings.default_knife_path.as_deref())?;
-        knife::list_configs(&bin)
+        knife::list_configs(&bin, sub_id)
     })
     .await
     .map_err(|e| format!("任务执行失败: {}", e))?
@@ -125,7 +128,7 @@ async fn knife_list_configs(settings: Settings) -> Result<Vec<KnifeConfig>, Stri
 async fn knife_test_all(settings: Settings) -> Result<Vec<KnifeHttpResult>, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let bin = knife::find_knife(settings.default_knife_path.as_deref())?;
-        knife::test_all(&bin)
+        knife::test_speed(&bin, None)
     })
     .await
     .map_err(|e| format!("任务执行失败: {}", e))?

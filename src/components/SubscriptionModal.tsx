@@ -13,6 +13,7 @@ import {
   Tag,
   Typography,
 } from "antd";
+import type { ColumnsType } from "antd/es/table";
 import {
   AppstoreOutlined,
   ArrowLeftOutlined,
@@ -35,33 +36,31 @@ interface SubscriptionModalProps {
   onClose: () => void;
 }
 
-type SubView = "list" | "nodes" | "all";
+type SubView = "list" | "nodes";
+
+// 节点视图数据范围：{ sub } = 单订阅节点，null = 全部订阅（跨订阅去重）
+type NodeScope = { sub: KnifeSubscription } | null;
 
 export default function SubscriptionModal({ open, onClose }: SubscriptionModalProps) {
   const { message } = App.useApp();
   const settings = useAppStore((s) => s.settings);
-  const knifeNodesCache = useAppStore((s) => s.knifeNodesCache);
 
   const [view, setView] = useState<SubView>("list");
   const [knifePath, setKnifePath] = useState<string | null>(null);
   const [subs, setSubs] = useState<KnifeSubscription[]>([]);
   const [loading, setLoading] = useState(false);
-  const [testingId, setTestingId] = useState<number | null>(null);
   const [fetchingId, setFetchingId] = useState<number | null>(null);
   const [importing, setImporting] = useState(false);
 
-  // 节点视图状态
-  const [activeSub, setActiveSub] = useState<KnifeSubscription | null>(null);
-  const [nodes, setNodes] = useState<string[]>([]);
+  // 节点视图状态（单订阅与全部订阅共用同一套表格/测速/导入逻辑）
+  const [nodeScope, setNodeScope] = useState<NodeScope>(null);
+  const [configs, setConfigs] = useState<KnifeConfig[]>([]);
+  const [results, setResults] = useState<KnifeHttpResult[] | null>(null);
+  const [delaySort, setDelaySort] = useState<"ascend" | "descend" | null>(null);
+  const [listLoading, setListLoading] = useState(false);
+  const [testing, setTesting] = useState(false);
   const [checked, setChecked] = useState<string[]>([]);
   const [replaceProxy, setReplaceProxy] = useState(true);
-
-  // 聚合视图状态（全部订阅去重节点，来自 subs list-configs）
-  const [allConfigs, setAllConfigs] = useState<KnifeConfig[]>([]);
-  const [allResults, setAllResults] = useState<KnifeHttpResult[] | null>(null);
-  const [delaySort, setDelaySort] = useState<"ascend" | "descend" | null>(null);
-  const [allLoading, setAllLoading] = useState(false);
-  const [testingAll, setTestingAll] = useState(false);
 
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -73,12 +72,11 @@ export default function SubscriptionModal({ open, onClose }: SubscriptionModalPr
     if (!open) return;
     setView("list");
     setSubs([]);
-    setNodes([]);
     setChecked([]);
     setReplaceProxy(true);
-    setActiveSub(null);
-    setAllConfigs([]);
-    setAllResults(null);
+    setNodeScope(null);
+    setConfigs([]);
+    setResults(null);
     setDelaySort(null);
     void init();
   }, [open]);
@@ -131,7 +129,6 @@ export default function SubscriptionModal({ open, onClose }: SubscriptionModalPr
     try {
       await api.knifeRemoveSubscription(settings, id);
       message.success("已删除订阅");
-      invalidateCache(id);
       await loadSubs();
     } catch (e) {
       message.error(String(e));
@@ -144,7 +141,6 @@ export default function SubscriptionModal({ open, onClose }: SubscriptionModalPr
     try {
       await api.knifeFetchSubscription(settings, id);
       message.success("已更新订阅");
-      invalidateCache(id);
       await loadSubs();
     } catch (e) {
       message.error(String(e));
@@ -171,106 +167,59 @@ export default function SubscriptionModal({ open, onClose }: SubscriptionModalPr
     }
   };
 
-  const handleTest = async (sub: KnifeSubscription) => {
-    // 命中缓存则直接进入节点视图，无需重新测试
-    const cached = knifeNodesCache[sub.id];
-    if (cached) {
-      setActiveSub({ ...sub });
-      setNodes(cached);
-      setChecked([]);
-      setView("nodes");
-      return;
-    }
-    if (testingId !== null) return;
-    await runTest(sub, true);
-  };
-
-  const invalidateCache = (id: number) => {
-    const store = useAppStore.getState();
-    if (store.knifeNodesCache[id] !== undefined) {
-      const next = { ...store.knifeNodesCache };
-      delete next[id];
-      store.setKnifeNodesCache(next);
-    }
-  };
-
-  const runTest = async (sub: KnifeSubscription, saveCache: boolean) => {
-    setTestingId(sub.id);
-    try {
-      await api.knifeFetchSubscription(settings, sub.id);
-      const links = await api.knifeTestSubscription(settings, sub.id);
-      setActiveSub({ ...sub });
-      setNodes(links);
-      setChecked([]);
-      if (saveCache) {
-        const store = useAppStore.getState();
-        const next = { ...store.knifeNodesCache, [sub.id]: links };
-        store.setKnifeNodesCache(next);
-      }
-      setView("nodes");
-    } catch (e) {
-      message.error(String(e));
-    } finally {
-      setTestingId(null);
-    }
-  };
-
-  // 重新测试当前订阅：跳过缓存，更新节点
-  const handleRetest = async () => {
-    if (!activeSub || testingId !== null) return;
-    invalidateCache(activeSub.id);
-    await runTest(activeSub, true);
-  };
-
-  // 聚合视图：即时列出全库去重节点（不测速、不写缓存）
-  const openAllConfigs = async () => {
+  // 进入节点视图：即时列出库内节点（不测速），测速在视图内进行
+  const openNodes = async (scope: NodeScope) => {
+    setNodeScope(scope);
     setChecked([]);
-    setAllResults(null);
+    setResults(null);
     setDelaySort(null);
-    setView("all");
-    setAllLoading(true);
+    setConfigs([]);
+    setView("nodes");
+    setListLoading(true);
     try {
-      setAllConfigs(await api.knifeListConfigs(settings));
+      setConfigs(await api.knifeListConfigs(settings, scope ? scope.sub.id : null));
     } catch (e) {
       message.error(String(e));
       setView("list");
     } finally {
-      setAllLoading(false);
+      setListLoading(false);
     }
   };
 
-  // 全量测速：单个 http --from-db 进程测全库，完成后显示状态/延迟并默认按延迟升序
-  const handleTestAll = async () => {
-    if (testingAll) return;
-    setTestingAll(true);
+  // 测速：单订阅用 --sub-id，全库不带；完成后显示状态/延迟并默认按延迟升序
+  const handleTestSpeed = async () => {
+    if (testing) return;
+    setTesting(true);
     try {
-      const results = await api.knifeTestAll(settings);
-      setAllResults(results);
+      const rs = nodeScope
+        ? await api.knifeTestSubscription(settings, nodeScope.sub.id)
+        : await api.knifeTestAll(settings);
+      setResults(rs);
       setDelaySort("ascend");
-      const passed = new Set(results.filter((r) => r.status === "passed").map((r) => r.link));
+      const passed = new Set(rs.filter((r) => r.status === "passed").map((r) => r.link));
       setChecked((prev) => prev.filter((l) => passed.has(l)));
-      message.success(`测试通过 ${passed.size} / ${results.length} 个节点`);
+      message.success(`测试通过 ${passed.size} / ${rs.length} 个节点`);
     } catch (e) {
       message.error(String(e));
     } finally {
-      setTestingAll(false);
+      setTesting(false);
     }
   };
 
   const resultMap = useMemo(() => {
     const m = new Map<string, KnifeHttpResult>();
-    for (const r of allResults ?? []) m.set(r.link, r);
+    for (const r of results ?? []) m.set(r.link, r);
     return m;
-  }, [allResults]);
+  }, [results]);
 
   // 排序时失败节点恒排最后；未测速保持库内顺序
   const sortedConfigs = useMemo(() => {
-    if (!allResults || delaySort === null) return allConfigs;
+    if (!results || delaySort === null) return configs;
     const rank = (c: KnifeConfig) => {
       const r = resultMap.get(c.link);
       return r && r.status === "passed" ? r.delay : Number.POSITIVE_INFINITY;
     };
-    return [...allConfigs].sort((a, b) => {
+    return [...configs].sort((a, b) => {
       const ra = rank(a);
       const rb = rank(b);
       const aBad = ra === Number.POSITIVE_INFINITY;
@@ -282,18 +231,18 @@ export default function SubscriptionModal({ open, onClose }: SubscriptionModalPr
       const d = ra - rb;
       return delaySort === "ascend" ? d : -d;
     });
-  }, [allConfigs, allResults, delaySort, resultMap]);
+  }, [configs, results, delaySort, resultMap]);
 
   const passedCount = useMemo(
-    () => (allResults ? allResults.filter((r) => r.status === "passed").length : 0),
-    [allResults],
+    () => (results ? results.filter((r) => r.status === "passed").length : 0),
+    [results],
   );
 
   // 选至此：替换为第 1 行到当前行范围内所有通过节点（未测速则范围内全选）
   const selectUpTo = (index: number) => {
     const range = sortedConfigs.slice(0, index + 1);
     const links = range
-      .filter((c) => !allResults || resultMap.get(c.link)?.status === "passed")
+      .filter((c) => !results || resultMap.get(c.link)?.status === "passed")
       .map((c) => c.link);
     setChecked(links);
   };
@@ -317,8 +266,8 @@ export default function SubscriptionModal({ open, onClose }: SubscriptionModalPr
       const existingTags = new Set(existing.map((o) => o.tag).filter((t): t is string => !!t));
       const imported: OutboundObject[] = [];
       let failed = 0;
-      const results = await api.knifeParseLinks(settings, selected);
-      for (const r of results) {
+      const parseResults = await api.knifeParseLinks(settings, selected);
+      for (const r of parseResults) {
         if (!r.ok || !r.outbound) {
           failed++;
           continue;
@@ -345,6 +294,71 @@ export default function SubscriptionModal({ open, onClose }: SubscriptionModalPr
       setImporting(false);
     }
   };
+
+  const nodeColumns: ColumnsType<KnifeConfig> = [
+    {
+      title: "协议",
+      width: 80,
+      render: (_, c) => <Tag>{c.protocol || "?"}</Tag>,
+    },
+    {
+      title: "延迟",
+      width: 110,
+      sorter: true,
+      sortOrder: results ? delaySort : undefined,
+      render: (_, c) => {
+        const r = resultMap.get(c.link);
+        if (!r) return results ? <Typography.Text type="danger">失败</Typography.Text> : "-";
+        return r.status === "passed" ? (
+          <Typography.Text style={{ fontSize: 12 }}>{r.delay} ms</Typography.Text>
+        ) : (
+          <Typography.Text type="danger">失败</Typography.Text>
+        );
+      },
+    },
+    {
+      title: "备注",
+      width: 160,
+      render: (_, c) => (
+        <Typography.Text ellipsis style={{ fontSize: 12 }}>
+          {c.remark || "-"}
+        </Typography.Text>
+      ),
+    },
+    // 单订阅视图隐藏「来源订阅」列
+    ...(nodeScope
+      ? []
+      : [
+          {
+            title: "来源订阅",
+            width: 140,
+            render: (_: unknown, c: KnifeConfig) => (
+              <Typography.Text ellipsis type="secondary" style={{ fontSize: 12 }}>
+                {subLabel(c.subscriptionId)}
+              </Typography.Text>
+            ),
+          },
+        ]),
+    {
+      title: "节点链接",
+      width: 300,
+      render: (_, c) => (
+        <Typography.Text ellipsis style={{ fontSize: 12, fontFamily: "monospace" }}>
+          {c.link}
+        </Typography.Text>
+      ),
+    },
+    {
+      title: "操作",
+      width: 88,
+      fixed: "right",
+      render: (_, _c: KnifeConfig, index: number) => (
+        <Button size="small" type="link" onClick={() => selectUpTo(index)}>
+          选至此
+        </Button>
+      ),
+    },
+  ];
 
   return (
     <Modal
@@ -376,7 +390,7 @@ export default function SubscriptionModal({ open, onClose }: SubscriptionModalPr
             <Button size="small" type="text" icon={<ReloadOutlined />} onClick={loadSubs}>
               刷新
             </Button>
-            <Button size="small" type="text" icon={<AppstoreOutlined />} onClick={openAllConfigs}>
+            <Button size="small" type="text" icon={<AppstoreOutlined />} onClick={() => openNodes(null)}>
               全部节点
             </Button>
           </Space>
@@ -417,8 +431,7 @@ export default function SubscriptionModal({ open, onClose }: SubscriptionModalPr
                       <Button
                         size="small"
                         icon={<ThunderboltOutlined />}
-                        loading={testingId === s.id}
-                        onClick={() => handleTest(s)}
+                        onClick={() => openNodes({ sub: s })}
                       >
                         查看节点
                       </Button>
@@ -457,8 +470,8 @@ export default function SubscriptionModal({ open, onClose }: SubscriptionModalPr
             </Space>
           </ScrollArea>
         </Spin>
-      ) : view === "all" ? (
-        <Spin spinning={allLoading}>
+      ) : (
+        <Spin spinning={listLoading}>
           <Space style={{ marginBottom: 8 }} wrap>
             <Button
               size="small"
@@ -468,19 +481,23 @@ export default function SubscriptionModal({ open, onClose }: SubscriptionModalPr
             >
               返回订阅列表
             </Button>
-            <Typography.Text strong>全部订阅</Typography.Text>
+            <Typography.Text strong>
+              {nodeScope ? nodeScope.sub.remark || nodeScope.sub.url : "全部订阅"}
+            </Typography.Text>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              {allResults === null
-                ? `共 ${allConfigs.length} 个节点（跨订阅去重）`
-                : `测试通过 ${passedCount} / ${allConfigs.length} 个节点`}
+              {results === null
+                ? nodeScope
+                  ? `共 ${configs.length} 个节点`
+                  : `共 ${configs.length} 个节点（跨订阅去重）`
+                : `测试通过 ${passedCount} / ${configs.length} 个节点`}
             </Typography.Text>
             <Button
               size="small"
               icon={<ThunderboltOutlined />}
-              loading={testingAll}
-              onClick={handleTestAll}
+              loading={testing}
+              onClick={handleTestSpeed}
             >
-              全量测速
+              {nodeScope ? "测速" : "全量测速"}
             </Button>
             <Checkbox checked={replaceProxy} onChange={(e) => setReplaceProxy(e.target.checked)}>
               替换现有 proxy
@@ -502,9 +519,13 @@ export default function SubscriptionModal({ open, onClose }: SubscriptionModalPr
             dataSource={sortedConfigs}
             pagination={false}
             size="small"
-            scroll={{ y: Math.round(window.innerHeight * 0.5), x: 940 }}
+            scroll={{ y: Math.round(window.innerHeight * 0.5), x: nodeScope ? 800 : 940 }}
             style={{ width: "100%" }}
-            locale={{ emptyText: "库中暂无节点，请先对各订阅点击更新" }}
+            locale={{
+              emptyText: nodeScope
+                ? "该订阅暂无节点，请先在订阅列表点击「更新」"
+                : "库中暂无节点，请先对各订阅点击更新",
+            }}
             rowSelection={{
               selectedRowKeys: checked,
               onChange: (keys) => setChecked(keys.map(String)),
@@ -513,131 +534,9 @@ export default function SubscriptionModal({ open, onClose }: SubscriptionModalPr
               const s = Array.isArray(sorter) ? sorter[0] : sorter;
               setDelaySort(s.order ?? null);
             }}
-            columns={[
-              {
-                title: "协议",
-                width: 80,
-                render: (_: unknown, c) => <Tag>{c.protocol || "?"}</Tag>,
-              },
-              {
-                title: "延迟",
-                width: 110,
-                sorter: true,
-                sortOrder: allResults ? delaySort : undefined,
-                render: (_: unknown, c) => {
-                  const r = resultMap.get(c.link);
-                  if (!r) return allResults ? <Typography.Text type="danger">失败</Typography.Text> : "-";
-                  return r.status === "passed" ? (
-                    <Typography.Text style={{ fontSize: 12 }}>{r.delay} ms</Typography.Text>
-                  ) : (
-                    <Typography.Text type="danger">失败</Typography.Text>
-                  );
-                },
-              },
-              {
-                title: "备注",
-                width: 160,
-                render: (_: unknown, c) => (
-                  <Typography.Text ellipsis style={{ fontSize: 12 }}>
-                    {c.remark || "-"}
-                  </Typography.Text>
-                ),
-              },
-              {
-                title: "来源订阅",
-                width: 140,
-                render: (_: unknown, c) => (
-                  <Typography.Text ellipsis type="secondary" style={{ fontSize: 12 }}>
-                    {subLabel(c.subscriptionId)}
-                  </Typography.Text>
-                ),
-              },
-              {
-                title: "节点链接",
-                width: 300,
-                render: (_: unknown, c) => (
-                  <Typography.Text ellipsis style={{ fontSize: 12, fontFamily: "monospace" }}>
-                    {c.link}
-                  </Typography.Text>
-                ),
-              },
-              {
-                title: "操作",
-                width: 88,
-                fixed: "right",
-                render: (_: unknown, _c: KnifeConfig, index: number) => (
-                  <Button size="small" type="link" onClick={() => selectUpTo(index)}>
-                    选至此
-                  </Button>
-                ),
-              },
-            ]}
+            columns={nodeColumns}
           />
         </Spin>
-      ) : (
-        <>
-          <Space style={{ marginBottom: 8 }} wrap>
-            <Button
-              size="small"
-              type="text"
-              icon={<ArrowLeftOutlined />}
-              onClick={() => setView("list")}
-            >
-              返回订阅列表
-            </Button>
-            <Typography.Text strong>{activeSub?.remark}</Typography.Text>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              测试通过 {nodes.length} 个节点
-            </Typography.Text>
-            <Button
-              size="small"
-              icon={<ThunderboltOutlined />}
-              loading={testingId === activeSub?.id}
-              onClick={handleRetest}
-            >
-              重新测试
-            </Button>
-            <Checkbox checked={replaceProxy} onChange={(e) => setReplaceProxy(e.target.checked)}>
-              替换现有 proxy
-            </Checkbox>
-            <Button
-              size="small"
-              type="primary"
-              icon={<ExportOutlined />}
-              disabled={checked.length === 0}
-              loading={importing}
-              onClick={handleImport}
-            >
-              解析导入 {checked.length} 个到出站
-            </Button>
-          </Space>
-          <Table<string>
-            rowKey={(link) => link}
-            dataSource={nodes}
-            pagination={false}
-            size="small"
-            scroll={{ y: "50vh", x: true }}
-            style={{ width: "100%" }}
-            locale={{ emptyText: "没有测试通过的节点" }}
-            rowSelection={{
-              selectedRowKeys: checked,
-              onChange: (keys) => setChecked(keys.map(String)),
-            }}
-            columns={[
-              {
-                title: "节点链接",
-                render: (_: unknown, link: string) => (
-                  <Typography.Text
-                    ellipsis
-                    style={{ fontSize: 12, fontFamily: "monospace" }}
-                  >
-                    {link}
-                  </Typography.Text>
-                ),
-              },
-            ]}
-          />
-        </>
       )}
 
       <Modal

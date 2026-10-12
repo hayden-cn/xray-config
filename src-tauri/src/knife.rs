@@ -101,15 +101,20 @@ fn parse_subs_table(stdout: &str) -> Result<Vec<KnifeSubscription>, String> {
     Ok(subs)
 }
 
-/// 列出全库去重后的节点（跨订阅聚合，`subs list-configs --json`，需 v11+）
-pub fn list_configs(bin: &Path) -> Result<Vec<KnifeConfig>, String> {
-    let args = vec![
+/// 列出库内去重节点（`subs list-configs --json`，需 v11+）。
+/// `sub_id`=Some 时仅列该订阅的节点，None 为全库。
+pub fn list_configs(bin: &Path, sub_id: Option<i64>) -> Result<Vec<KnifeConfig>, String> {
+    let mut args = vec![
         "subs".into(),
         "list-configs".into(),
         "--json".into(),
         "--limit".into(),
         "0".into(),
     ];
+    if let Some(id) = sub_id {
+        args.push("--sub-id".into());
+        args.push(id.to_string());
+    }
     let out = run_with_timeout(bin, &args, Duration::from_secs(30))?;
     if out.code != 0 {
         let detail = out.stderr.trim();
@@ -123,32 +128,35 @@ pub fn list_configs(bin: &Path) -> Result<Vec<KnifeConfig>, String> {
         .map_err(|e| format!("解析 subs list-configs --json 输出失败: {}", e))
 }
 
-pub fn test_subscription(bin: &Path, sub_id: i64) -> Result<Vec<String>, String> {
-    run_http_test(
-        bin,
-        &["--sub-id".into(), sub_id.to_string()],
-        Duration::from_secs(600),
-    )
-}
-
-/// 全库测速（不带 --sub-id，库内按链接全局去重，需 v11+）。
-/// 用 `-x json` 拿全量结果（含 status/delay）；部分/全部失败时 CLI 会非零退出，
-/// 但只要结果文件有效仍视为成功。
-pub fn test_all(bin: &Path) -> Result<Vec<KnifeHttpResult>, String> {
+/// 测速（`http --from-db -x json`，需 v11+）。`sub_id`=Some 单订阅，None 全库。
+/// 部分/全部失败时 CLI 会非零退出，但只要结果文件有效仍视为成功。
+pub fn test_speed(bin: &Path, sub_id: Option<i64>) -> Result<Vec<KnifeHttpResult>, String> {
     let dir = tempfile::tempdir().map_err(|e| format!("创建临时目录失败: {}", e))?;
     let out_path = dir.path().join("results.json");
 
-    let args = vec![
+    let mut args = vec![
         "http".into(),
         "--from-db".into(),
         "--limit".into(),
         "0".into(),
+    ];
+    if let Some(id) = sub_id {
+        args.push("--sub-id".into());
+        args.push(id.to_string());
+    }
+    args.extend_from_slice(&[
         "-x".into(),
         "json".into(),
         "-o".into(),
         out_path.to_string_lossy().into_owned(),
-    ];
-    let out = run_with_timeout(bin, &args, Duration::from_secs(1800))?;
+    ]);
+    // 单订阅量小给 10 分钟，全库给 30 分钟
+    let timeout = if sub_id.is_some() {
+        Duration::from_secs(600)
+    } else {
+        Duration::from_secs(1800)
+    };
+    let out = run_with_timeout(bin, &args, timeout)?;
 
     if let Ok(content) = std::fs::read_to_string(&out_path) {
         if let Ok(results) = serde_json::from_str::<Vec<KnifeHttpResult>>(&content) {
@@ -161,29 +169,6 @@ pub fn test_all(bin: &Path) -> Result<Vec<KnifeHttpResult>, String> {
         return Err(format!("xray-knife http 测试失败 (exit {}):\n{}", out.code, detail));
     }
     Ok(Vec::new())
-}
-
-fn run_http_test(bin: &Path, extra_args: &[String], timeout: Duration) -> Result<Vec<String>, String> {
-    let dir = tempfile::tempdir().map_err(|e| format!("创建临时目录失败: {}", e))?;
-    let out_path = dir.path().join("valid_links.txt");
-
-    let mut args = vec!["http".into(), "--from-db".into()];
-    args.extend_from_slice(extra_args);
-    args.extend_from_slice(&["-x".into(), "txt".into(), "-o".into(), out_path.to_string_lossy().into_owned()]);
-    let out = run_with_timeout(bin, &args, timeout)?;
-    if out.code != 0 {
-        let detail = out.stderr.trim();
-        let detail = if detail.is_empty() { out.stdout.trim() } else { detail };
-        return Err(format!("xray-knife http 测试失败 (exit {}):\n{}", out.code, detail));
-    }
-
-    let content = std::fs::read_to_string(&out_path).unwrap_or_default();
-    let links: Vec<String> = content
-        .lines()
-        .map(|l| l.trim().to_string())
-        .filter(|l| !l.is_empty() && l.contains("://"))
-        .collect();
-    Ok(links)
 }
 
 pub fn parse_link(bin: &Path, link: &str) -> Result<KnifeParseResult, String> {

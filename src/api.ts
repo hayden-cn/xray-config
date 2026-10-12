@@ -32,9 +32,9 @@ export const api = {
   knifeListSubscriptions: (settings: Settings) =>
     invoke<KnifeSubscription[]>("knife_list_subscriptions", { settings }),
   knifeTestSubscription: (settings: Settings, subId: number) =>
-    invoke<string[]>("knife_test_subscription", { settings, subId }),
-  knifeListConfigs: (settings: Settings) =>
-    invoke<KnifeConfig[]>("knife_list_configs", { settings }),
+    invoke<KnifeHttpResult[]>("knife_test_subscription", { settings, subId }),
+  knifeListConfigs: (settings: Settings, subId?: number | null) =>
+    invoke<KnifeConfig[]>("knife_list_configs", { settings, subId }),
   knifeTestAll: (settings: Settings) =>
     invoke<KnifeHttpResult[]>("knife_test_all", { settings }),
   knifeParseLink: (settings: Settings, link: string) =>
